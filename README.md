@@ -161,6 +161,23 @@ par défaut ; `--apply` est nécessaire pour écrire. Il n'installe pas
 automatiquement de commandes de tests inconnues. Passer un SHA de référence
 du workflow central après validation et fusion.
 
+## Participer et signaler un problème
+
+- [Guide de contribution](CONTRIBUTING.md) : règles des Pull Requests et tests.
+- [Politique de signalement de sécurité](SECURITY.md) : évitez de publier des secrets.
+- [Exemple de lecture d'un rapport](docs/EXAMPLE-REPORT.md).
+
+## Préparation de la première version
+
+Le dépôt n'a pas encore de version stable publiée. Avant de créer une release
+`v1.0.0`, son propriétaire doit choisir explicitement une **licence open source**
+et ajouter le fichier `LICENSE` correspondant. Aucun droit de réutilisation
+ne doit être présumé du seul fait que le dépôt est public.
+
+Une fois la licence ajoutée et les tests vérifiés, documenter les changements
+dans les notes de version, créer un tag sur un commit validé, puis publier la
+release GitHub. Ne pas taguer une version stable avant ces étapes.
+
 ## Limites et maintenance
 
 Les runners standards GitHub sont gratuits pour les dépôts publics ; les dépôts
