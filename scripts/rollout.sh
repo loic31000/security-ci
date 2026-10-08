@@ -38,4 +38,4 @@ YAML
   encoded="$(printf '%s' "$content" | base64 | tr -d '\n')"
   gh api -X PUT "repos/$repo/contents/$path" -f "message=chore: install centralized audit" -f "content=$encoded" -f "branch=$branch" >/dev/null
   gh pr create --repo "$repo" --base "$default_branch" --head "$branch" --title "chore: enable centralized security audit" --body "SHA-pinned non-blocking security and maintainability analysis. Test execution requires separate configuration."
-done < <(gh api "users/loic31000/repos?per_page=100&type=owner" --paginate --jq '.[] | [.name,.default_branch,(.archived|tostring),(.fork|tostring)] | @tsv')
+done < <(gh api "user/repos?per_page=100&affiliation=owner" --paginate --jq '.[] | [.name,.default_branch,(.archived|tostring),(.fork|tostring)] | @tsv')
