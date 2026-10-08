@@ -9,6 +9,7 @@ les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
 | SCA / IaC | Trivy | HIGH et CRITICAL |
 | Secrets | Gitleaks CLI | Historique Git accessible, secrets masqués |
 | GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
+| Maintenabilité | jscpd + Radon | Duplications multi-langage ; complexité et maintenabilité Python |
 
 ## Utilisation
 
@@ -46,7 +47,7 @@ automatiquement. Aucun secret ni `secrets: inherit` n'est nécessaire.
 - Les erreurs techniques et rapports absents/incomplets font échouer le contrôle
   dans les deux modes. Une exécution verte en mode rapport peut contenir des alertes.
 - Résumés : **Actions → exécution → Summary**.
-- Rapports détaillés : artifacts `security-*`, au format SARIF, conservés 7 jours.
+- Rapports détaillés : artifacts `security-*` (SARIF) et `maintainability-*` (JSON), conservés 7 jours.
 - Pas de publication automatique dans **Security → Code scanning** ni de
   commentaire sur les PR.
 
@@ -80,6 +81,5 @@ Gitleaks masque les secrets dans ses résultats ; les autres rapports peuvent co
 des extraits de code. zizmor fonctionne hors ligne : les contrôles nécessitant
 l'API GitHub ne sont pas exécutés. Aucun scanner ne garantit l'absence de faille.
 
-SonarQube, la dette technique, la couverture, les tests et le DAST ne sont pas inclus
-dans cette première version. Les versions et règles doivent être mises à jour et
+Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. SonarQube, les métriques de complexité des autres langages, la couverture, les tests et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
 validées régulièrement dans ce dépôt central.
