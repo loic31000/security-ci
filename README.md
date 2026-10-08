@@ -59,6 +59,45 @@ Les protections de branches se configurent séparément : un contrôle en échec
 ne bloque pas automatiquement la fusion. Le mode strict concerne les alertes
 présentes, pas uniquement les nouvelles alertes introduites par une PR.
 
+
+## Qualité multi-langage et tests opt-in
+
+Le job maintainability produit maintenant un fichier `lizard.xml` pour la complexité
+multi-langage, en complément des rapports jscpd et Radon. Ces mesures sont
+informatives et ne constituent pas une estimation financière de dette technique.
+
+Un dépôt appelant peut activer les tests en passant une commande adaptée à sa
+stack. La commande s'exécute **dans le dépôt appelant**, sans secrets hérités :
+ne l'activez que pour un projet de confiance, après revue de ses scripts.
+
+```yaml
+jobs:
+  security:
+    uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
+    permissions:
+      contents: read
+    with:
+      enforce: false
+      test_command: 'npm ci && npm run test -- --coverage'
+      coverage_paths: |
+        coverage/
+```
+
+Autres exemples à adapter après inspection du projet :
+Python `python -m pip install -r requirements.txt && python -m pytest --cov=. --cov-report=xml`;
+Go `go test ./... -coverprofile=coverage.out`.
+La CI ne devine pas les commandes de test et ne prétend pas mesurer une
+couverture si aucun rapport n'est généré. Les tests échoués font échouer
+leur job ; l'absence de `test_command` désactive le job sans valider de tests.
+
+## Déploiement
+
+Le script `scripts/rollout.sh` prépare des Pull Requests de déploiement
+sans modifier directement les branches principales. Il est en simulation
+par défaut ; `--apply` est nécessaire pour écrire. Il n'installe pas
+automatiquement de commandes de tests inconnues. Passer un SHA de référence
+du workflow central après validation et fusion.
+
 ## Limites et maintenance
 
 Les runners standards GitHub sont gratuits pour les dépôts publics ; les dépôts
@@ -81,5 +120,5 @@ Gitleaks masque les secrets dans ses résultats ; les autres rapports peuvent co
 des extraits de code. zizmor fonctionne hors ligne : les contrôles nécessitant
 l'API GitHub ne sont pas exécutés. Aucun scanner ne garantit l'absence de faille.
 
-Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. SonarQube, les métriques de complexité des autres langages, la couverture, les tests et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
+Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. SonarQube, les fonctions de complexité des autres langages (Lizard) et un job de tests configurable sont disponibles. La couverture exige une configuration propre à chaque projet ; SonarQube et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
 validées régulièrement dans ce dépôt central.
