@@ -210,11 +210,7 @@ jobs:
 
       - name: Générer le rapport lisible pour les développeurs
         if: always()
-        run: |
-          python3 .audit-report-tools/scripts/sarif_to_markdown.py \\
-            "$REPORT_DIR/$SCANNER.sarif" \\
-            "$REPORT_DIR/$SCANNER.md" \\
-            --scanner "$SCANNER"
+        run: python3 .audit-report-tools/scripts/sarif_to_markdown.py "$REPORT_DIR/$SCANNER.sarif" "$REPORT_DIR/$SCANNER.md" --scanner "$SCANNER"
 
       - name: Conserver le rapport
         if: always()
