@@ -194,7 +194,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-maintainability:
+  maintainability:
     name: Maintainability - duplication and Python metrics
     runs-on: ubuntu-24.04
     timeout-minutes: 20
