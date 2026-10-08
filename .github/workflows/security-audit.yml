@@ -34,7 +34,6 @@ jobs:
         shell: bash
     env:
       SCANNER: ${{ matrix.scanner }}
-      REPORT_DIR: ${{ runner.temp }}/security-reports
       ENFORCE: ${{ inputs.enforce || false }}
     steps:
       - name: Récupérer le code du dépôt appelant
@@ -44,7 +43,10 @@ jobs:
           persist-credentials: false
 
       - name: Préparer les rapports
-        run: mkdir -p "$REPORT_DIR"
+        run: |
+          report_dir="$RUNNER_TEMP/security-reports"
+          mkdir -p "$report_dir"
+          echo "REPORT_DIR=$report_dir" >> "$GITHUB_ENV"
 
       - name: Préparer Python
         if: matrix.scanner == 'semgrep' || matrix.scanner == 'zizmor'
