@@ -299,6 +299,19 @@ jobs:
               summary.write("\n**Interprétation :** ces indicateurs sont informatifs et ne bloquent pas la CI. Rapports JSON/XML dans l’artifact `maintainability-*`.\n")
           PY
 
+      - name: Charger le générateur Markdown de maintenabilité
+        if: always()
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: f57730c8776f99a8ca0c5b104eb88666c7a4a52b
+          path: .audit-report-tools
+          persist-credentials: false
+
+      - name: Générer maintainability.md
+        if: always()
+        run: python3 .audit-report-tools/scripts/maintainability_to_markdown.py "$RUNNER_TEMP/maintainability" "$RUNNER_TEMP/maintainability/maintainability.md"
+
       - name: Upload maintainability reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -307,6 +320,7 @@ jobs:
           path: |
             ${{ runner.temp }}/maintainability/*.json
             ${{ runner.temp }}/maintainability/*.xml
+            ${{ runner.temp }}/maintainability/*.md
           retention-days: 7
           if-no-files-found: error
 
