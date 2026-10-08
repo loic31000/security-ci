@@ -103,6 +103,25 @@ La CI ne devine pas les commandes de test et ne prétend pas mesurer une
 couverture si aucun rapport n'est généré. Les tests échoués font échouer
 leur job ; l'absence de `test_command` désactive le job sans valider de tests.
 
+## Lire les rapports de maintenabilité, tests et couverture
+
+En plus des quatre scanners de sécurité, le résumé GitHub Actions explique :
+
+| Mesure | Description simple | Interprétation |
+|---|---|---|
+| **jscpd** | Nombre de blocs de code identiques ou proches. | Une duplication peut compliquer les modifications ; ce n'est pas automatiquement un défaut. |
+| **Radon (Python)** | Fonctions avec une complexité cyclomatique d'au moins 11 et fichiers dont l'indice de maintenabilité est inférieur à 20. | Indicateurs à examiner, sans blocage de sécurité. |
+| **Lizard** | Complexité sur plusieurs langages ; valeurs d'au moins 15 signalées. | Aide à identifier le code difficile à suivre ou tester. |
+| **Tests optionnels** | Affiche si la commande de tests du projet a réussi ou échoué. | Le job est ignoré quand `test_command` est absent ; cela ne valide aucun test. |
+| **Couverture optionnelle** | Lit le pourcentage de lignes depuis `coverage.xml` au format Cobertura quand il est présent à la racine. | Un rapport manquant affiche « non disponible » et non « 0 % ». |
+
+Les données complètes sont conservées 7 jours dans les artifacts
+`maintainability-*` (JSON et XML) et, si configuré, `coverage-*`.
+Le taux indiqué ne porte que sur les fichiers et tests présents dans le rapport.
+Les seuils de complexité sont informatifs et **ne bloquent pas** les fusions.
+Ce résumé n'installe pas d'outil de tests propre à une stack : la commande vient
+exclusivement du dépôt appelant.
+
 ## Déploiement
 
 Le script `scripts/rollout.sh` prépare des Pull Requests de déploiement
