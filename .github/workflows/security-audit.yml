@@ -173,6 +173,12 @@ jobs:
           except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError):
               error = "Erreur technique : consulter les logs du contrôle."
 
+          descriptions = {
+              "semgrep": "Semgrep examine le code source pour signaler des problèmes de sécurité potentiels.",
+              "trivy": "Trivy recherche des vulnérabilités connues dans les dépendances et des erreurs de configuration (niveaux élevés et critiques).",
+              "gitleaks": "Gitleaks recherche des secrets potentiels dans l'historique Git, en masquant leurs valeurs.",
+              "zizmor": "zizmor vérifie les workflows GitHub Actions et signale les pratiques risquées.",
+          }
           status = error or (
               "Alertes détectées" if count else
               "Aucune alerte détectée dans le périmètre analysé"
@@ -180,6 +186,7 @@ jobs:
           mode = "strict" if enforce else "rapport"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write(f"### Audit : {scanner}\n\n")
+              summary.write(f"**Description :** {descriptions[scanner]}\\n\\n")
               summary.write("| État | Alertes | Mode |\n|---|---:|---|\n")
               summary.write(
                   f"| {status} | {count if count is not None else 'N/A'} | {mode} |\n\n"
