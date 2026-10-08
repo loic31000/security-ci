@@ -24,6 +24,23 @@ Le reste de l'affichage et les règles de décision sont inchangés. Une alerte
 n'est pas nécessairement une faille confirmée ; le mode rapport ne la bloque pas,
 le mode strict la bloque. Les artifacts SARIF apportent les détails.
 
+## Rapports de sécurité lisibles pour les développeurs
+
+Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
+également un **rapport Markdown** téléchargeable dans le même artifact
+`security-<scanner>-<run_id>-<tentative>` :
+
+- `semgrep.md` : règle, gravité, fichier, ligne, explication et lien GitHub.
+- `trivy.md` : vulnérabilité ou erreur de configuration, gravité, emplacement et explication.
+- `gitleaks.md` : emplacement d'un secret potentiel, sans reproduire les valeurs sensibles.
+- `zizmor.md` : risque dans un workflow GitHub Actions, avec chemin, ligne et explication.
+
+Ouvrir **Actions → exécution → Artifacts**, télécharger l'archive du
+scanner puis ouvrir le fichier `.md` pour lire les résultats.
+Si le scanner ne fournit ni ligne ni emplacement, le rapport l'indique
+plutôt que de les inventer. Les signalements doivent être confirmés
+avant correction. Un rapport Markdown n'est pas un audit manuel.
+
 ## Utilisation
 
 Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
