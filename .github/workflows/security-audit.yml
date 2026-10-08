@@ -186,7 +186,7 @@ jobs:
           mode = "strict" if enforce else "rapport"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write(f"### Audit : {scanner}\n\n")
-              summary.write(f"**Description :** {descriptions[scanner]}\\n\\n")
+              summary.write(f"**Description :** {descriptions[scanner]}\n\n")
               summary.write("| État | Alertes | Mode |\n|---|---:|---|\n")
               summary.write(
                   f"| {status} | {count if count is not None else 'N/A'} | {mode} |\n\n"
