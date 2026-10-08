@@ -255,8 +255,13 @@ jobs:
           from pathlib import Path
           root = Path(os.environ["RUNNER_TEMP"]) / "maintainability"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write("### Maintainability metrics\n\n")
-              for filename, metric in [("jscpd-report.json", "Duplications"), ("python-complexity.json", "Python complexity >= 11"), ("python-maintainability.json", "Python files with MI < 20")]:
+              summary.write("### Maintenabilité du code\n\n")
+              summary.write("**Description :** Ces mesures repèrent du code répété et des fonctions difficiles à maintenir. Elles ne prouvent pas la présence d'une vulnérabilité.\\n\\n")
+              for filename, metric, description in [
+                  ("jscpd-report.json", "jscpd : blocs dupliqués", "Nombre de blocs de code similaires détectés dans plusieurs langages."),
+                  ("python-complexity.json", "Radon : fonctions Python complexes (>= 11)", "Nombre de fonctions Python dont le cheminement logique est complexe."),
+                  ("python-maintainability.json", "Radon : fichiers Python avec indice MI < 20", "Nombre de fichiers Python avec un faible indice de maintenabilité."),
+              ]:
                   f = root / filename
                   if not f.exists():
                       summary.write(f"- {metric}: report unavailable\n")
@@ -314,9 +319,45 @@ jobs:
           python-version: '3.12'
 
       - name: Run caller-provided tests
+        id: caller_tests
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
         run: bash --noprofile --norc -e -o pipefail -c "$TEST_COMMAND"
+
+      - name: Résumé des tests et de la couverture
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.caller_tests.outcome }}
+          COVERAGE_PATHS: ${{ inputs.coverage_paths }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          outcome = os.environ.get("TEST_OUTCOME", "unknown")
+          report = Path("coverage.xml")
+          coverage = None
+          if report.is_file():
+              try:
+                  root = ET.parse(report).getroot()
+                  if root.tag == "coverage" and "line-rate" in root.attrib:
+                      value = float(root.attrib["line-rate"]) * 100
+                      if 0 <= value <= 100:
+                          coverage = f"{value:.1f} %"
+              except (OSError, ValueError, ET.ParseError):
+                  pass
+          status = {"success": "Tests réussis", "failure": "Tests échoués",
+                    "skipped": "Tests non exécutés"}.get(outcome, "Résultat indisponible")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("### Tests et couverture\\n\\n")
+              summary.write("**Description :** exécute la commande de tests fournie par le projet. La couverture mesure la part de code exécutée par ces tests, si un rapport compatible est disponible.\\n\\n")
+              summary.write(f"- **Résultat des tests :** {status}.\\n")
+              summary.write(f"- **Couverture mesurée :** {coverage if coverage else 'Non disponible (aucun rapport coverage.xml compatible détecté)'}.\\n")
+              summary.write("- **Rapports de couverture :** " +
+                  ("artifact `coverage-*` si les chemins fournis existent.\\n" if os.environ.get("COVERAGE_PATHS", "").strip() else "non configurés.\\n"))
+              summary.write("\\n**Attention :** un test réussi ne prouve pas l'absence de bugs, et un rapport non trouvé ne signifie pas 0 % de couverture.\\n")
+          PY
 
       - name: Upload caller-provided coverage reports
         if: always() && inputs.coverage_paths != ''
