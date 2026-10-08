@@ -96,7 +96,7 @@ Le job maintainability produit maintenant un fichier `lizard.xml` pour la comple
 multi-langage, en complément des rapports jscpd et Radon. Ces mesures sont
 informatives et ne constituent pas une estimation financière de dette technique.
 
-Un dépôt appelant peut activer les tests en passant une commande adaptée à sa
+Un dépôt appelant doit configurer les tests en passant une commande adaptée à sa
 stack. La commande s'exécute **dans le dépôt appelant**, sans secrets hérités :
 ne l'activez que pour un projet de confiance, après revue de ses scripts.
 
@@ -117,8 +117,10 @@ Autres exemples à adapter après inspection du projet :
 Python `python -m pip install -r requirements.txt && python -m pytest --cov=. --cov-report=xml`;
 Go `go test ./... -coverprofile=coverage.out`.
 La CI ne devine pas les commandes de test et ne prétend pas mesurer une
-couverture si aucun rapport n'est généré. Les tests échoués font échouer
-leur job ; l'absence de `test_command` désactive le job sans valider de tests.
+couverture si aucun rapport n'est généré. **Sans `test_command`, le job échoue**
+dans un dépôt appelant pour éviter une validation trompeuse ; les tests échoués
+font aussi échouer le job. Seul `security-ci` lui-même exécute ses tests
+unitaires intégrés lorsque la commande n'est pas fournie.
 
 ## Lire les rapports de maintenabilité, tests et couverture
 
@@ -129,7 +131,7 @@ En plus des quatre scanners de sécurité, le résumé GitHub Actions explique :
 | **jscpd** | Nombre de blocs de code identiques ou proches. | Une duplication peut compliquer les modifications ; ce n'est pas automatiquement un défaut. |
 | **Radon (Python)** | Fonctions avec une complexité cyclomatique d'au moins 11 et fichiers dont l'indice de maintenabilité est inférieur à 20. | Indicateurs à examiner, sans blocage de sécurité. |
 | **Lizard** | Complexité sur plusieurs langages ; valeurs d'au moins 15 signalées. | Aide à identifier le code difficile à suivre ou tester. |
-| **Tests optionnels** | Affiche si la commande de tests du projet a réussi ou échoué. | Le job est ignoré quand `test_command` est absent ; cela ne valide aucun test. |
+| **Tests du projet** | Affiche si la commande de tests du projet a réussi ou échoué. | Commande obligatoire pour un dépôt appelant ; son absence fait échouer le job. |
 | **Couverture optionnelle** | Lit le pourcentage de lignes depuis `coverage.xml` au format Cobertura quand il est présent à la racine. | Un rapport manquant affiche « non disponible » et non « 0 % ». |
 
 Les données complètes sont conservées 7 jours dans les artifacts
@@ -188,7 +190,7 @@ révision corrective de la branche 1.25. Les dépendances transitives des instal
 Python ne sont pas verrouillées par hash. Les règles Semgrep téléchargées et les
 bases CVE Trivy évoluent : les résultats ne sont pas parfaitement reproductibles.
 
-L'analyse ne lance ni les scripts d'installation ni les tests du projet. Trivy
+L'analyse de sécurité ne lance pas les scripts d'installation. Le job de tests exécute uniquement la commande explicitement fournie par le dépôt appelant. Trivy
 analyse les manifests/lockfiles qu'il prend en charge : un résultat sans alerte
 ne prouve pas que toutes les dépendances ont été couvertes. Les fichiers ignorés,
 les configurations des scanners et les exclusions du dépôt affectent le périmètre.
