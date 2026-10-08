@@ -256,7 +256,7 @@ jobs:
           root = Path(os.environ["RUNNER_TEMP"]) / "maintainability"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write("### Maintenabilité du code\n\n")
-              summary.write("**Description :** Ces mesures repèrent du code répété et des fonctions difficiles à maintenir. Elles ne prouvent pas la présence d'une vulnérabilité.\\n\\n")
+              summary.write("**Description :** Ces mesures repèrent du code répété et des fonctions difficiles à maintenir. Elles ne prouvent pas la présence d'une vulnérabilité.\n\n")
               for filename, metric, description in [
                   ("jscpd-report.json", "jscpd : blocs dupliqués", "Nombre de blocs de code similaires détectés dans plusieurs langages."),
                   ("python-complexity.json", "Radon : fonctions Python complexes (>= 11)", "Nombre de fonctions Python dont le cheminement logique est complexe."),
@@ -264,7 +264,7 @@ jobs:
               ]:
                   f = root / filename
                   if not f.exists():
-                      summary.write(f"- {metric}: report unavailable\n")
+                      summary.write(f"- **{metric}** : rapport indisponible. {description}\n")
                       continue
                   data = json.loads(f.read_text())
                   if filename.startswith("jscpd"):
@@ -273,15 +273,15 @@ jobs:
                       count = sum(b.get("complexity", 0) >= 11 for bs in data.values() if isinstance(bs, list) for b in bs)
                   else:
                       count = sum(v.get("mi", 100) < 20 for v in data.values() if isinstance(v, dict))
-                  summary.write(f"- {metric}: {count}\n")
+                  summary.write(f"- **{metric}** : {count}. {description}\n")
               xml = root / "lizard.xml"
               if xml.exists():
                   import xml.etree.ElementTree as ET
                   tree = ET.parse(xml)
                   functions = tree.findall(".//item")
                   high = sum(int(node.get("value", "0")) >= 15 for node in tree.findall(".//measure[@type='Function']/value"))
-                  summary.write(f"- Lizard XML generated; high complexity candidates: {high}; parsed entries: {len(functions)}\n")
-              summary.write("\nInformational metrics only; no blocking quality gate.\n")
+                  summary.write(f"- **Lizard : complexité multi-langage** : {high} valeurs >= 15 (entrées XML analysées : {len(functions)}). Aide à repérer les fonctions complexes.\n")
+              summary.write("\n**Interprétation :** ces indicateurs sont informatifs et ne bloquent pas la CI. Rapports JSON/XML dans l’artifact `maintainability-*`.\n")
           PY
 
       - name: Upload maintainability reports
@@ -350,13 +350,13 @@ jobs:
           status = {"success": "Tests réussis", "failure": "Tests échoués",
                     "skipped": "Tests non exécutés"}.get(outcome, "Résultat indisponible")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write("### Tests et couverture\\n\\n")
-              summary.write("**Description :** exécute la commande de tests fournie par le projet. La couverture mesure la part de code exécutée par ces tests, si un rapport compatible est disponible.\\n\\n")
-              summary.write(f"- **Résultat des tests :** {status}.\\n")
-              summary.write(f"- **Couverture mesurée :** {coverage if coverage else 'Non disponible (aucun rapport coverage.xml compatible détecté)'}.\\n")
+              summary.write("### Tests et couverture\n\n")
+              summary.write("**Description :** exécute la commande de tests fournie par le projet. La couverture mesure la part de code exécutée par ces tests, si un rapport compatible est disponible.\n\n")
+              summary.write(f"- **Résultat des tests :** {status}.\n")
+              summary.write(f"- **Couverture mesurée :** {coverage if coverage else 'Non disponible (aucun rapport coverage.xml compatible détecté)'}.\n")
               summary.write("- **Rapports de couverture :** " +
-                  ("artifact `coverage-*` si les chemins fournis existent.\\n" if os.environ.get("COVERAGE_PATHS", "").strip() else "non configurés.\\n"))
-              summary.write("\\n**Attention :** un test réussi ne prouve pas l'absence de bugs, et un rapport non trouvé ne signifie pas 0 % de couverture.\\n")
+                  ("artifact `coverage-*` si les chemins fournis existent.\n" if os.environ.get("COVERAGE_PATHS", "").strip() else "non configurés.\n"))
+              summary.write("\n**Attention :** un test réussi ne prouve pas l'absence de bugs, et un rapport non trouvé ne signifie pas 0 % de couverture.\n")
           PY
 
       - name: Upload caller-provided coverage reports
