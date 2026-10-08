@@ -173,42 +173,20 @@ jobs:
           except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError):
               error = "Erreur technique : consulter les logs du contrôle."
 
-          descriptions = {
-              "semgrep": "Recherche de problèmes de sécurité potentiels dans le code (SAST).",
-              "trivy": "Recherche de vulnérabilités élevées ou critiques dans les dépendances et de mauvaises configurations (SCA/IaC).",
-              "gitleaks": "Recherche de chaînes ressemblant à des secrets dans l'historique Git accessible (secrets masqués).",
-              "zizmor": "Recherche de mauvaises pratiques dans les workflows GitHub Actions (gravité moyenne ou supérieure).",
-          }
           status = error or (
-              "⚠️ Alertes à examiner" if count else
-              "✅ Aucune alerte dans le périmètre analysé"
+              "Alertes détectées" if count else
+              "Aucune alerte détectée dans le périmètre analysé"
           )
           mode = "strict" if enforce else "rapport"
-          decision = (
-              "⛔ INTERDIT — erreur technique" if error else
-              "⛔ INTERDIT — alertes bloquantes" if enforce and count else
-              "✅ AUTORISÉ — alertes à examiner" if count else
-              "✅ AUTORISÉ — aucun signalement"
-          )
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write(f"### Audit — {scanner}\\n\\n")
-              summary.write(f"**À quoi sert ce contrôle ?** {descriptions[scanner]}\\n\\n")
-              summary.write("| État du scan | Alertes | Mode | Décision de la CI |\\n")
-              summary.write("|---|---:|---|---|\\n")
+              summary.write(f"### Audit : {scanner}\n\n")
+              summary.write("| État | Alertes | Mode |\n|---|---:|---|\n")
               summary.write(
-                  f"| {status} | {count if count is not None else '—'} | {mode} | {decision} |\\n\\n"
+                  f"| {status} | {count if count is not None else 'N/A'} | {mode} |\n\n"
               )
               summary.write(
-                  "**Comment lire ce résultat ?** Une alerte est un élément à vérifier, "
-                  "pas une vulnérabilité automatiquement confirmée. "
-                  "**AUTORISÉ** signifie seulement que ce contrôle ne bloque pas la CI ; "
-                  "**INTERDIT** signifie que ce contrôle échoue. "
-                  "Cela ne donne aucune autorisation de fusion ou de déploiement.\\n\\n"
-              )
-              summary.write(
-                  f"**Rapport détaillé :** artifact `security-{scanner}-<run_id>-<tentative>` "
-                  "(fichier SARIF), conservé 7 jours si généré. "
-                  "Dans GitHub Actions, ouvrir l'exécution puis **Artifacts**.\\n"
+                  "Le rapport SARIF est disponible dans les artifacts "
+                  "si sa génération a abouti.\n"
               )
           if error or (enforce and count):
               sys.exit(1)
