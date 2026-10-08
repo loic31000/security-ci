@@ -11,37 +11,6 @@ les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
 | GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
 | Maintenabilité | jscpd + Radon | Duplications multi-langage ; complexité et maintenabilité Python |
 
-## Comprendre les rapports (lecture publique)
-
-Chaque job affiche un résumé dans **Actions → exécution → Summary**, puis publie
-un fichier SARIF téléchargeable dans **Artifacts** (conservation : 7 jours).
-
-| Rapport | Question simple à laquelle il répond | À vérifier |
-|---|---|---|
-| **Semgrep — SAST** | Y a-t-il du code potentiellement dangereux ? | Examiner le fichier et la ligne indiqués ; certains résultats sont des faux positifs. |
-| **Trivy — SCA / IaC** | Certaines dépendances ou configurations connues présentent-elles des risques élevés/critiques ? | Vérifier versions, CVE et exposition réelle ; seules les sévérités HIGH/CRITICAL sont incluses ici. |
-| **Gitleaks — secrets** | Le dépôt contient-il des chaînes ressemblant à des mots de passe ou des clés ? | Vérifier si elles sont réelles, actives et exposées ; les valeurs sont masquées dans le rapport. |
-| **zizmor — CI/CD** | Les workflows GitHub Actions présentent-ils des pratiques risquées ? | Vérifier les permissions, actions, déclencheurs et recommandations, avec le filtre de gravité configuré. |
-| **Maintenabilité — jscpd/Radon/Lizard** | Où le code est-il dupliqué ou complexe ? | Ce sont des indicateurs de refactoring, pas des vulnérabilités confirmées ; rapports JSON/XML. |
-| **Tests et couverture (facultatifs)** | Les tests configurés passent-ils et leur rapport de couverture est-il produit ? | Seules les commandes et les chemins fournis par le projet sont exécutés ; aucune couverture supposée. |
-
-### Signification exacte des mots AUTORISÉ et INTERDIT
-
-- **✅ AUTORISÉ (mode rapport)** : le scanner a terminé correctement ; les alertes
-  restent visibles mais ne font pas échouer son job. **Ce n'est ni une validation
-  de sécurité ni une permission de fusion/déploiement.**
-- **⛔ INTERDIT (mode strict)** : au moins une alerte retenue bloque le job.
-- **⛔ INTERDIT (erreur technique)** : le scanner a échoué ou le SARIF est absent,
-  illisible ou invalide selon les vérifications ; ceci bloque **dans les deux modes**.
-- **✅ AUTORISÉ (zéro alerte)** : aucune alerte n'a été produite dans le périmètre
-  et avec les règles retenues ; cela ne garantit pas l'absence de vulnérabilité.
-
-**Exemple Semgrep :** 1 alerte en mode rapport donne
-« ⚠️ Alertes à examiner | 1 | rapport | ✅ AUTORISÉ — alertes à examiner ».
-La même alerte en mode strict donne « ⛔ INTERDIT — alertes bloquantes ».
-Le nombre d'alertes est celui des résultats SARIF, pas un nombre de
-vulnérabilités confirmées.
-
 ## Utilisation
 
 Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
