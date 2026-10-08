@@ -11,6 +11,19 @@ les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
 | GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
 | Maintenabilité | jscpd + Radon | Duplications multi-langage ; complexité et maintenabilité Python |
 
+## Lire les descriptions des audits
+
+Chaque contrôle de sécurité affiche maintenant une phrase simple dans le résumé GitHub Actions, juste avant son tableau **État / Alertes / Mode** :
+
+- **Semgrep** : analyse le code et signale des problèmes de sécurité potentiels.
+- **Trivy** : détecte des vulnérabilités connues dans les dépendances et des erreurs de configuration, de sévérité élevée ou critique.
+- **Gitleaks** : recherche des secrets potentiels dans l'historique Git, sans afficher leur valeur.
+- **zizmor** : inspecte les workflows GitHub Actions et signale des pratiques risquées.
+
+Le reste de l'affichage et les règles de décision sont inchangés. Une alerte
+n'est pas nécessairement une faille confirmée ; le mode rapport ne la bloque pas,
+le mode strict la bloque. Les artifacts SARIF apportent les détails.
+
 ## Utilisation
 
 Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
