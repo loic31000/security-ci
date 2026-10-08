@@ -192,19 +192,38 @@ jobs:
                   f"| {status} | {count if count is not None else 'N/A'} | {mode} |\n\n"
               )
               summary.write(
-                  "Le rapport SARIF est disponible dans les artifacts "
+                  "Les rapports Markdown (lisibles) et SARIF (outils) sont disponibles dans les artifacts "
                   "si sa génération a abouti.\n"
               )
           if error or (enforce and count):
               sys.exit(1)
           PY
 
+      - name: Charger le générateur de rapport Markdown
+        if: always()
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 8b101d2fb0c140ebc11b42ba909af2a803ce6c92
+          path: .audit-report-tools
+          persist-credentials: false
+
+      - name: Générer le rapport lisible pour les développeurs
+        if: always()
+        run: |
+          python3 .audit-report-tools/scripts/sarif_to_markdown.py \\
+            "$REPORT_DIR/$SCANNER.sarif" \\
+            "$REPORT_DIR/$SCANNER.md" \\
+            --scanner "$SCANNER"
+
       - name: Conserver le rapport
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: security-${{ matrix.scanner }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/security-reports/*.sarif
+          path: |
+            ${{ runner.temp }}/security-reports/*.sarif
+            ${{ runner.temp }}/security-reports/*.md
           retention-days: 7
           if-no-files-found: warn
 
