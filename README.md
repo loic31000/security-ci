@@ -139,6 +139,20 @@ Les seuils de complexité sont informatifs et **ne bloquent pas** les fusions.
 Ce résumé n'installe pas d'outil de tests propre à une stack : la commande vient
 exclusivement du dépôt appelant.
 
+## Rapport de maintenabilité lisible
+
+L'artifact `maintainability-*` contient maintenant `maintainability.md`,
+en plus de `jscpd-report.json`, des fichiers Radon JSON et de `lizard.xml`.
+Le Markdown récapitule les duplications, les fichiers et lignes des blocs
+identifiés lorsque ces informations existent, les fonctions Python complexes,
+les faibles indices de maintenabilité et les mesures Lizard.
+Les détails complets restent dans les fichiers originaux.
+
+Les générateurs Markdown sont testés automatiquement sur les Pull Requests
+et sur `main` par `.github/workflows/report-tests.yml`. Les tests couvrent
+notamment la localisation, la protection des valeurs sensibles Gitleaks,
+les chemins malveillants, les rapports vides et les métriques de maintenance.
+
 ## Déploiement
 
 Le script `scripts/rollout.sh` prépare des Pull Requests de déploiement
