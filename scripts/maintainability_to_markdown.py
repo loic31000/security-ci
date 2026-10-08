@@ -23,7 +23,7 @@ def render(root):
                   "Deux portions de code similaires peuvent rendre la maintenance plus difficile.", ""]
         for i, duplicate in enumerate(blocks[:100], 1):
             a, b = duplicate.get("firstFile", {}), duplicate.get("secondFile", {})
-            lines.append(f"{i}. \`{safe(a.get('name', '?'))}:{a.get('start', 'N/A')}\` et \`{safe(b.get('name', '?'))}:{b.get('start', 'N/A')}\`")
+            lines.append(f"{i}. `{safe(a.get('name', '?'))}:{a.get('start', 'N/A')}` et `{safe(b.get('name', '?'))}:{b.get('start', 'N/A')}`")
         if len(blocks) > 100:
             lines.append(f"Autres duplications : {len(blocks)-100}. Consulter le JSON.")
     else:
@@ -36,14 +36,14 @@ def render(root):
         lines += ["", f"## Complexité Python Radon : {len(records)} fonction(s) >= 11", "",
                   "Une valeur élevée indique davantage de chemins logiques à tester.", ""]
         for path, item in records[:100]:
-            lines.append(f"- \`{safe(path)}:{item.get('lineno', 'N/A')}\` : **{safe(item.get('name', '?'))}**, complexité {item.get('complexity')}")
+            lines.append(f"- `{safe(path)}:{item.get('lineno', 'N/A')}` : **{safe(item.get('name', '?'))}**, complexité {item.get('complexity')}")
     mi = root / "python-maintainability.json"
     if mi.exists():
         data = json.loads(mi.read_text())
         low = [(p, v.get("mi")) for p, v in data.items() if isinstance(v, dict) and v.get("mi", 100) < 20]
         lines += ["", f"## Maintenabilité Python Radon : {len(low)} fichier(s) avec indice < 20", ""]
         for path, score in low[:100]:
-            lines.append(f"- \`{safe(path)}\` : indice {score}")
+            lines.append(f"- `{safe(path)}` : indice {score}")
     xml = root / "lizard.xml"
     if xml.exists():
         tree = ET.parse(xml)
