@@ -1,0 +1,193 @@
+name: Security Audit
+
+on:
+  workflow_call:
+    inputs:
+      enforce:
+        description: Faire échouer les contrôles en présence d'alertes
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: Activer le mode strict
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit - ${{ matrix.scanner }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scanner: [semgrep, trivy, gitleaks, zizmor]
+    defaults:
+      run:
+        shell: bash
+    env:
+      SCANNER: ${{ matrix.scanner }}
+      REPORT_DIR: ${{ runner.temp }}/security-reports
+      ENFORCE: ${{ inputs.enforce || false }}
+    steps:
+      - name: Récupérer le code du dépôt appelant
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Préparer les rapports
+        run: mkdir -p "$REPORT_DIR"
+
+      - name: Préparer Python
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'zizmor'
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Installer Semgrep
+        if: matrix.scanner == 'semgrep'
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install 'semgrep==1.179.0'
+
+      - name: Installer zizmor
+        if: matrix.scanner == 'zizmor'
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install 'zizmor==1.30.1'
+
+      - name: Préparer Go
+        if: matrix.scanner == 'gitleaks'
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: '1.25.x'
+          cache: false
+
+      - name: Installer Gitleaks
+        if: matrix.scanner == 'gitleaks'
+        working-directory: ${{ runner.temp }}
+        run: |
+          GOBIN="$RUNNER_TEMP/security-bin" \
+            go install github.com/zricethezav/gitleaks/v8@v8.30.1
+
+      - name: Analyser avec Trivy
+        id: trivy
+        if: matrix.scanner == 'trivy'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          format: sarif
+          limit-severities-for-sarif: 'true'
+          output: ${{ runner.temp }}/security-reports/trivy.sarif
+          exit-code: '0'
+          ignore-unfixed: false
+          timeout: 15m
+          cache: false
+          cache-dir: ${{ runner.temp }}/trivy-cache
+
+      - name: Analyser avec Semgrep, Gitleaks ou zizmor
+        id: scan
+        if: matrix.scanner != 'trivy'
+        run: |
+          set -euo pipefail
+          case "$SCANNER" in
+            semgrep)
+              semgrep scan \
+                --config p/security-audit \
+                --metrics off \
+                --disable-version-check \
+                --strict \
+                --sarif \
+                --output "$REPORT_DIR/semgrep.sarif" \
+                .
+              ;;
+            gitleaks)
+              "$RUNNER_TEMP/security-bin/gitleaks" git . \
+                --redact=100 \
+                --report-format sarif \
+                --report-path "$REPORT_DIR/gitleaks.sarif" \
+                --exit-code 0 \
+                --no-banner
+              ;;
+            zizmor)
+              zizmor --offline --min-severity medium --format sarif \
+                . > "$REPORT_DIR/zizmor.sarif"
+              ;;
+            *) exit 2 ;;
+          esac
+
+      - name: Résumé et décision
+        if: always()
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          TRIVY_OUTCOME: ${{ steps.trivy.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          scanner = os.environ["SCANNER"]
+          outcome = os.environ[
+              "TRIVY_OUTCOME" if scanner == "trivy" else "SCAN_OUTCOME"
+          ]
+          report = Path(os.environ["REPORT_DIR"]) / f"{scanner}.sarif"
+          enforce = os.environ["ENFORCE"].lower() == "true"
+          count = None
+          error = None
+          try:
+              if outcome != "success":
+                  raise RuntimeError("Analyse non terminée avec succès")
+              data = json.loads(report.read_text())
+              runs = data["runs"]
+              if not isinstance(runs, list) or not runs:
+                  raise ValueError("Rapport SARIF incomplet")
+              for run in runs:
+                  for invocation in run.get("invocations", []):
+                      if invocation.get("executionSuccessful") is False:
+                          raise RuntimeError("Erreur signalée par le scanner")
+                      for notification in invocation.get("toolExecutionNotifications", []):
+                          if notification.get("level") == "error":
+                              raise RuntimeError("Erreur signalée par le scanner")
+              count = sum(len(run.get("results", [])) for run in runs)
+          except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError):
+              error = "Erreur technique : consulter les logs du contrôle."
+
+          status = error or (
+              "Alertes détectées" if count else
+              "Aucune alerte détectée dans le périmètre analysé"
+          )
+          mode = "strict" if enforce else "rapport"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"### Audit — {scanner}\n\n")
+              summary.write("| État | Alertes | Mode |\n|---|---:|---|\n")
+              summary.write(
+                  f"| {status} | {count if count is not None else '—'} | {mode} |\n\n"
+              )
+              summary.write(
+                  "Le rapport SARIF est disponible dans les artifacts "
+                  "si sa génération a abouti.\n"
+              )
+          if error or (enforce and count):
+              sys.exit(1)
+          PY
+
+      - name: Conserver le rapport
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-${{ matrix.scanner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/security-reports/*.sarif
+          retention-days: 7
+          if-no-files-found: warn
