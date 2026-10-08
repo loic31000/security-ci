@@ -169,12 +169,10 @@ du workflow central après validation et fusion.
 
 ## Préparation de la première version
 
-Le dépôt n'a pas encore de version stable publiée. Avant de créer une release
-`v1.0.0`, son propriétaire doit choisir explicitement une **licence open source**
-et ajouter le fichier `LICENSE` correspondant. Aucun droit de réutilisation
-ne doit être présumé du seul fait que le dépôt est public.
+Le projet est distribué sous **licence MIT** (voir [LICENSE](LICENSE)).
+La première version stable `v1.0.0` n'a pas encore été publiée.
 
-Une fois la licence ajoutée et les tests vérifiés, documenter les changements
+Une fois les tests vérifiés, documenter les changements
 dans les notes de version, créer un tag sur un commit validé, puis publier la
 release GitHub. Ne pas taguer une version stable avant ces étapes.
 
