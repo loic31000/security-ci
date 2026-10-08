@@ -179,10 +179,10 @@ jobs:
           )
           mode = "strict" if enforce else "rapport"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-              summary.write(f"### Audit — {scanner}\n\n")
+              summary.write(f"### Audit : {scanner}\n\n")
               summary.write("| État | Alertes | Mode |\n|---|---:|---|\n")
               summary.write(
-                  f"| {status} | {count if count is not None else '—'} | {mode} |\n\n"
+                  f"| {status} | {count if count is not None else 'N/A'} | {mode} |\n\n"
               )
               summary.write(
                   "Le rapport SARIF est disponible dans les artifacts "
