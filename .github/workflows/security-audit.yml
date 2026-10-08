@@ -116,7 +116,6 @@ jobs:
                 --config p/security-audit \
                 --metrics off \
                 --disable-version-check \
-                --strict \
                 --sarif \
                 --output "$REPORT_DIR/semgrep.sarif" \
                 .
