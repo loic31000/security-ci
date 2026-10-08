@@ -24,6 +24,23 @@ Le reste de l'affichage et les règles de décision sont inchangés. Une alerte
 n'est pas nécessairement une faille confirmée ; le mode rapport ne la bloque pas,
 le mode strict la bloque. Les artifacts SARIF apportent les détails.
 
+## Rapports de sécurité lisibles pour les développeurs
+
+Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
+également un **rapport Markdown** téléchargeable dans le même artifact
+`security-<scanner>-<run_id>-<tentative>` :
+
+- `semgrep.md` : règle, gravité, fichier, ligne, explication et lien GitHub.
+- `trivy.md` : vulnérabilité ou erreur de configuration, gravité, emplacement et explication.
+- `gitleaks.md` : emplacement d'un secret potentiel, sans reproduire les valeurs sensibles.
+- `zizmor.md` : risque dans un workflow GitHub Actions, avec chemin, ligne et explication.
+
+Ouvrir **Actions → exécution → Artifacts**, télécharger l'archive du
+scanner puis ouvrir le fichier `.md` pour lire les résultats.
+Si le scanner ne fournit ni ligne ni emplacement, le rapport l'indique
+plutôt que de les inventer. Les signalements doivent être confirmés
+avant correction. Un rapport Markdown n'est pas un audit manuel.
+
 ## Utilisation
 
 Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
@@ -102,6 +119,39 @@ Go `go test ./... -coverprofile=coverage.out`.
 La CI ne devine pas les commandes de test et ne prétend pas mesurer une
 couverture si aucun rapport n'est généré. Les tests échoués font échouer
 leur job ; l'absence de `test_command` désactive le job sans valider de tests.
+
+## Lire les rapports de maintenabilité, tests et couverture
+
+En plus des quatre scanners de sécurité, le résumé GitHub Actions explique :
+
+| Mesure | Description simple | Interprétation |
+|---|---|---|
+| **jscpd** | Nombre de blocs de code identiques ou proches. | Une duplication peut compliquer les modifications ; ce n'est pas automatiquement un défaut. |
+| **Radon (Python)** | Fonctions avec une complexité cyclomatique d'au moins 11 et fichiers dont l'indice de maintenabilité est inférieur à 20. | Indicateurs à examiner, sans blocage de sécurité. |
+| **Lizard** | Complexité sur plusieurs langages ; valeurs d'au moins 15 signalées. | Aide à identifier le code difficile à suivre ou tester. |
+| **Tests optionnels** | Affiche si la commande de tests du projet a réussi ou échoué. | Le job est ignoré quand `test_command` est absent ; cela ne valide aucun test. |
+| **Couverture optionnelle** | Lit le pourcentage de lignes depuis `coverage.xml` au format Cobertura quand il est présent à la racine. | Un rapport manquant affiche « non disponible » et non « 0 % ». |
+
+Les données complètes sont conservées 7 jours dans les artifacts
+`maintainability-*` (JSON et XML) et, si configuré, `coverage-*`.
+Le taux indiqué ne porte que sur les fichiers et tests présents dans le rapport.
+Les seuils de complexité sont informatifs et **ne bloquent pas** les fusions.
+Ce résumé n'installe pas d'outil de tests propre à une stack : la commande vient
+exclusivement du dépôt appelant.
+
+## Rapport de maintenabilité lisible
+
+L'artifact `maintainability-*` contient maintenant `maintainability.md`,
+en plus de `jscpd-report.json`, des fichiers Radon JSON et de `lizard.xml`.
+Le Markdown récapitule les duplications, les fichiers et lignes des blocs
+identifiés lorsque ces informations existent, les fonctions Python complexes,
+les faibles indices de maintenabilité et les mesures Lizard.
+Les détails complets restent dans les fichiers originaux.
+
+Les générateurs Markdown sont testés automatiquement sur les Pull Requests
+et sur `main` par `.github/workflows/report-tests.yml`. Les tests couvrent
+notamment la localisation, la protection des valeurs sensibles Gitleaks,
+les chemins malveillants, les rapports vides et les métriques de maintenance.
 
 ## Déploiement
 
