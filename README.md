@@ -79,7 +79,7 @@ absents et scans sans cibles échouent.
 
 Les dépendances Python et Go du moteur sont désormais **verrouillées avant
 installation** : le fichier `locks/python-tools.txt` impose 75 versions
-transitives avec SHA-256, via `pip --require-hashes`, et
+transitives avec SHA-256, via `pip --require-hashes --only-binary=:all:` (aucune installation de code source non verrouillé), et
 `locks/gitleaks/go.mod` et `go.sum` figent les versions et contrôlent les
 archives Go avec `GOSUMDB=sum.golang.org`, `go mod verify` et
 `go build -mod=readonly`. Les jobs du workflow réutilisable utilisent des
