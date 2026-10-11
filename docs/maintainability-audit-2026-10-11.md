@@ -10,8 +10,8 @@ Sources : arbre Git suivi, scripts Python/workflows/tests et **artifact CI réel
 
 | Sujet | Constat | Décision |
 | --- | --- | --- |
-| Duplication jscpd | **97/97 clones** identifiés dans le rapport initial impliquent au moins un checkout généré (`.audit-*` ou `.git`). Le taux affiché de **51,2 %** mélange des copies temporaires et non du code réellement maintenu. | Exclure **uniquement les dossiers créés par le moteur** ainsi que `.git`. Conserver les contrôles positifs et négatifs. Le prochain rapport CI fait foi pour le nombre de vraies duplications. |
-| Complexité Lizard | **211 fonctions** mesurées, dont **96** associées à des checkouts générés. Parmi **12 fonctions CCN >= 15**, **7** concernent les sources principales. | Appliquer les mêmes exclusions de dossiers aux fichiers analysés, et refuser un rapport qui inclurait encore ces copies. |
+| Duplication jscpd | **97/97 clones** identifiés dans le rapport initial impliquent au moins un checkout généré (`.audit-*` ou `.git`). Le taux affiché de **51,2 %** mélange des copies temporaires et non du code réellement maintenu. | Exclure **uniquement les dossiers créés par le moteur** ainsi que `.git`. Conserver les contrôles positifs et négatifs. Le rapport de la PR après filtrage fait foi : 1 bloc réel, 19 lignes. |
+| Complexité Lizard | **211 fonctions** mesurées, dont **96** associées à des checkouts générés. Parmi **12 fonctions CCN >= 15**, **7** concernent les sources principales. | Exclusions appliquées et validées par le runner : 196 fonctions analysées, 11 CCN >= 15 et aucun chemin généré. |
 | Complexité Radon | **18 fonctions Python CC >= 11** dans les sources principales. Cette mesure ne présentait pas la même contamination : 29 fichiers Python analysés, aucun sous `.audit-*`. | Ne pas modifier Radon ni abaisser les seuils pour améliorer artificiellement les scores. |
 | Documentation | **16 tirets cadratins** relevés dans README/roadmap/notes d'essai/critères de release ; aucune entité HTML d'espace encodé relevée dans les textes suivis examinés. | Remplacer par `-` dans ces documents et protéger par un test de style. |
 | Fonctions potentiellement inutilisées | Lecture des points d'entrée `main`, imports entre scripts, références CLI dans les workflows et tests. **Aucune fonction morte démontrée** par cette inspection. | **Ne rien supprimer sans preuve d'absence d'utilisation runtime et dans les workflows SHA-pinnés.** Les scripts de QA manuelle restent utiles hors CI. |
@@ -20,7 +20,27 @@ Sources : arbre Git suivi, scripts Python/workflows/tests et **artifact CI réel
 (10 lignes, 100 tokens). Le rapport initial ne démontre pas une absence
 universelle de duplication : il prouve que **tous les 97 signalements
 affichés étaient contaminés par des copies de checkout**.
-La duplication réelle après exclusion doit être mesurée sur la CI corrigée.
+La CI corrigée a mesuré **1 bloc réel de 19 lignes** (0,32 %), entre deux sections de configuration des jobs GitHub Actions. Il s'agit d'une répétition courte, volontairement laissée intacte pour garder les jobs explicites.
+
+## Vérification de la correction sur un vrai runner
+
+Le premier run de la [PR #45](https://github.com/loic31000/security-ci/pull/45)
+a produit l'artifact de maintenabilité
+`maintainability-38169410603-1` (ID `11713480921`).
+
+- **jscpd** : 1 vrai clone, **19 lignes**, **0,32 %** ;
+  `.github/workflows/security-audit.yml` près des sections
+  `maintainability` et `tests`. Le scanner conserve ses seuils
+  de 10 lignes / 100 tokens et ses canaris de détection.
+- **Lizard** : 196 fonctions mesurées et 11 CCN >= 15. Les chemins des
+  checkouts générés sont absents du nouveau XML.
+- **Radon** : 18 fonctions CC >= 11, aucune exclusion supplémentaire.
+
+La différence de population entre les rapports avant/après interdit de
+comparer naïvement les **nombres bruts de fonctions** comme une variation
+du code. L'amélioration démontrée est la correction du périmètre
+d'analyse. Les scores ne constituent ni une preuve d'absence de défaut
+ni un besoin de refactoring immédiat.
 
 ## Points de maintenance à traiter par priorité
 
