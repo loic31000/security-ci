@@ -342,7 +342,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 5619f5a388cf71ed99c0fe5d36e069829e18be7d
+          ref: c44e024078f08e74a6cea37b6a0586984d802fca
           path: .audit-decision-tools
           persist-credentials: false
 
@@ -370,6 +370,115 @@ jobs:
           python3 .audit-decision-tools/scripts/scanner_precision.py \
             --scanner "$SCANNER" --positive "$positive" --negative "$negative" \
             --positive-file "$expected" --output "$REPORT_DIR/precision-$SCANNER.json"
+
+      - name: Verify second independent scanner control pair and aggregate calibration
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'gitleaks' || matrix.scanner == 'zizmor'
+        run: |
+          set -euo pipefail
+          controls="$RUNNER_TEMP/precision-second-$SCANNER"
+          mkdir -p "$controls/positive" "$controls/negative"
+          case "$SCANNER" in
+            semgrep)
+              cat > "$controls/positive/second_unsafe.py" <<'PY'
+          def run_untrusted_expression(untrusted):
+              return eval(untrusted)
+          PY
+              cat > "$controls/negative/second_safe.py" <<'PY'
+          import json
+          def parse_json_record(text):
+              return json.loads(text)
+          PY
+              semgrep scan --config "$SEMGREP_CONFIG_PATH" --metrics off \
+                --disable-version-check --sarif \
+                --output "$controls/positive/result.sarif" "$controls/positive/second_unsafe.py"
+              semgrep scan --config "$SEMGREP_CONFIG_PATH" --metrics off \
+                --disable-version-check --sarif \
+                --output "$controls/negative/result.sarif" "$controls/negative/second_safe.py"
+              expected="second_unsafe.py"
+              ;;
+            gitleaks)
+              python3 - "$controls/positive/second-canary.txt" <<'PY'
+          from pathlib import Path
+          import sys
+          # Deliberately nonfunctional, assembled inside the ephemeral runner only.
+          Path(sys.argv[1]).write_text(
+              'sample = "' + 'ghp_' + 'Zy8Bx7Nq6Ps5Rt4Uv3Wx2Yz1Ab0Cd9Ef8GhJ' + '"\n'
+          )
+          PY
+              cat > "$controls/negative/second-placeholder.txt" <<'TXT'
+          Documentation: GITHUB_TOKEN=REPLACE_WITH_YOUR_OWN
+          URL: https://example.org/docs/credentials
+          TXT
+              "$RUNNER_TEMP/security-bin/gitleaks" dir "$controls/positive" \
+                --redact=100 --report-format sarif \
+                --report-path "$controls/positive/result.sarif" \
+                --exit-code 0 --no-banner
+              "$RUNNER_TEMP/security-bin/gitleaks" dir "$controls/negative" \
+                --redact=100 --report-format sarif \
+                --report-path "$controls/negative/result.sarif" \
+                --exit-code 0 --no-banner
+              expected="second-canary.txt"
+              ;;
+            zizmor)
+              mkdir -p "$controls/positive/.github/workflows" "$controls/negative/.github/workflows"
+              cat > "$controls/positive/.github/workflows/second-insecure.yml" <<'YAML'
+          name: Additional unsafe test workflow
+          on: pull_request_target
+          permissions: write-all
+          jobs:
+            check:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - run: echo test
+          YAML
+              cat > "$controls/negative/.github/workflows/second-safe.yml" <<'YAML'
+          name: Additional safe test workflow
+          on: workflow_dispatch
+          permissions:
+            contents: read
+          jobs:
+            check:
+              runs-on: ubuntu-24.04
+              steps:
+                - run: echo "safe read-only fixture"
+          YAML
+              zizmor --offline --strict-collection --min-severity medium --format sarif \
+                "$controls/positive" > "$controls/positive/result.sarif"
+              zizmor --offline --strict-collection --min-severity medium --format sarif \
+                "$controls/negative" > "$controls/negative/result.sarif"
+              expected="second-insecure.yml"
+              ;;
+          esac
+          python3 .audit-decision-tools/scripts/scanner_precision.py \
+            --scanner "$SCANNER" --positive "$controls/positive/result.sarif" \
+            --negative "$controls/negative/result.sarif" --positive-file "$expected" \
+            --output "$REPORT_DIR/precision-$SCANNER-second.json"
+          python3 - "$REPORT_DIR" "$SCANNER" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          directory, scanner = Path(sys.argv[1]), sys.argv[2]
+          controls = [
+              json.loads((directory / f"precision-{scanner}.json").read_text()),
+              json.loads((directory / f"precision-{scanner}-second.json").read_text()),
+          ]
+          if any(c.get("status") != "PASS" or c.get("scanner") != scanner
+                 or c.get("scanner_identity_checked") is not True for c in controls):
+              raise SystemExit("calibration incomplete: mismatched tool or failed control")
+          keys = ("true_positive_fixtures", "true_negative_fixtures",
+                  "false_positive_fixtures", "false_negative_fixtures")
+          summary = {key: sum(c[key] for c in controls) for key in keys}
+          if summary != dict(zip(keys, (2, 2, 0, 0))):
+              raise SystemExit("incorrect fixture calibration counts")
+          summary.update({
+              "scanner": scanner, "pairs": 2, "status": "PASS",
+              "scope": "synthetic fixture outcomes only; not real-world accuracy",
+          })
+          (directory / f"precision-{scanner}-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          print(f"{scanner}: two independent positive/negative fixture pairs verified")
+          PY
 
       - name: Résumé et décision
         if: always()
