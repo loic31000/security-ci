@@ -258,7 +258,7 @@ jobs:
 
       - name: Measure multi-language complexity
         run: |
-          python -m pip install 'lizard==1.17.10'
+          python -m pip install 'lizard==1.17.10' 'defusedxml==0.7.1'
           lizard --xml . > "$RUNNER_TEMP/maintainability/lizard.xml"
 
       - name: Report metrics
@@ -291,7 +291,7 @@ jobs:
                   summary.write(f"- **{metric}** : {count}. {description}\n")
               xml = root / "lizard.xml"
               if xml.exists():
-                  import xml.etree.ElementTree as ET
+                  from defusedxml import ElementTree as ET
                   tree = ET.parse(xml)
                   functions = tree.findall(".//item")
                   high = sum(int(node.get("value", "0")) >= 15 for node in tree.findall(".//measure[@type='Function']/value"))
@@ -304,7 +304,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 395c6ceef8e3cb370afd50cc3c6b19c1394e8fdf
+          ref: fb9850ff5e14c14d527cec3b2656bff1b3ab1fef
           path: .audit-report-tools
           persist-credentials: false
 
@@ -325,8 +325,7 @@ jobs:
           if-no-files-found: error
 
   tests:
-    name: Tests and coverage (opt-in)
-    if: ${{ inputs.test_command != '' }}
+    name: Tests du projet et couverture
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -347,7 +346,27 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Vérifier la configuration des tests
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: |
+          if [[ -z "${TEST_COMMAND//[[:space:]]/}" && "$GITHUB_REPOSITORY" != "loic31000/security-ci" ]]; then
+            echo "::error::Tests non configurés : fournir with.test_command dans le workflow appelant."
+            echo "### Tests du projet : NON VALIDÉS" >> "$GITHUB_STEP_SUMMARY"
+            echo "Aucune commande de test fournie. Le job échoue pour éviter un faux résultat vert." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Installer les dépendances des tests du moteur
+        if: ${{ inputs.test_command == '' && github.repository == 'loic31000/security-ci' }}
+        run: python -m pip install 'defusedxml==0.7.1'
+
+      - name: Tester le moteur security-ci
+        if: ${{ inputs.test_command == '' && github.repository == 'loic31000/security-ci' }}
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Run caller-provided tests
+        if: ${{ inputs.test_command != '' }}
         id: caller_tests
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
@@ -357,6 +376,7 @@ jobs:
         if: always()
         env:
           TEST_OUTCOME: ${{ steps.caller_tests.outcome }}
+          SELF_TEST: ${{ github.repository == 'loic31000/security-ci' && inputs.test_command == '' }}
           COVERAGE_PATHS: ${{ inputs.coverage_paths }}
         run: |
           python3 - <<'PY'
@@ -378,6 +398,8 @@ jobs:
                   pass
           status = {"success": "Tests réussis", "failure": "Tests échoués",
                     "skipped": "Tests non exécutés"}.get(outcome, "Résultat indisponible")
+          if os.environ.get("SELF_TEST") == "true":
+              status = "Tests du moteur security-ci exécutés (vérifier le statut du job)"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write("### Tests et couverture\n\n")
               summary.write("**Description :** exécute la commande de tests fournie par le projet. La couverture mesure la part de code exécutée par ces tests, si un rapport compatible est disponible.\n\n")

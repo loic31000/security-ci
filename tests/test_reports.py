@@ -65,5 +65,17 @@ class ReportsTest(unittest.TestCase):
                 self.assertIn(needle, report)
 
 
+    def test_malicious_lizard_xml_entities_rejected(self):
+        from defusedxml.common import DefusedXmlException
+
+        module = load("maintainability_to_markdown")
+        malicious = '<!DOCTYPE root [<!ENTITY leak "unexpected expansion">]><root>&leak;</root>'
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "lizard.xml").write_text(malicious, encoding="utf-8")
+            with self.assertRaises(DefusedXmlException):
+                module.render(root)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,9 +11,10 @@ Merci de contribuer à l'amélioration des audits et de leurs rapports.
 
 ## Vérifications locales
 
-Les scripts de rapports ne nécessitent que Python 3 :
+Les scripts de rapports nécessitent Python 3 et `defusedxml` (parseur XML sécurisé) :
 
 ```bash
+python -m pip install 'defusedxml==0.7.1'
 python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
