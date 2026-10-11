@@ -146,6 +146,25 @@ couverture des dépendances et **essai sur local-agents dans une branche qui
 ne sera jamais fusionnée**. Le script `scripts/release_readiness.py`
 vérifie la complétude des preuves, mais ne crée aucun tag ni aucune release.
 
+## Calibration de la précision sur fixtures étiquetées
+
+Semgrep, Gitleaks et zizmor vérifient désormais, en plus de leurs contrôles
+historiques, une paire positive/négative avec le **vrai rapport SARIF**. Le
+validateur `scripts/scanner_precision.py` exige une alerte active sur le
+**bon fichier**, aucune alerte sur la fixture bénigne, et refuse les erreurs
+d'analyse, les suppressions acceptées comme preuve positive, ainsi que les
+rapports incomplets. Chaque job conserve un fichier `precision-<scanner>.json`
+dans ses artifacts, sans code source, messages ni valeurs de secrets.
+
+Les compteurs TP/TN/FP/FN sont mesurés **par fixture synthétique** ; ils ne
+décrivent pas la précision globale du moteur sur un projet réel. Une
+divergence entre le script exécuté et sa version testée bloque la CI.
+
+La [feuille de route multi-stacks](docs/stack-expansion-roadmap.md) ordonne
+les prochaines intégrations (Java/Kotlin, .NET, Rust, Ruby/PHP puis IaC),
+sans déclarer une couverture avant validation d'un inventaire réel et de
+fixtures adversariales. Le banc `local-agents` demeure isolé.
+
 ## Contrôles positifs et couverture des dépendances
 
 L'audit ne se contente plus de vérifier qu'un scanner termine sans erreur :
