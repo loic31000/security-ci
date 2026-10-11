@@ -65,6 +65,20 @@ class ReportsTest(unittest.TestCase):
                 self.assertIn(needle, report)
 
 
+    def test_sarif_suppressed_and_informational_not_labeled_confirmed(self):
+        module = load("sarif_to_markdown")
+        data = {"runs": [{"results": [
+            {"ruleId": "A", "level": "error", "suppressions": [{"status": "accepted"}]},
+            {"ruleId": "B", "kind": "pass"},
+            {"ruleId": "C", "level": "warning"}
+        ]}]}
+        markdown = module.render(data, "semgrep")
+        self.assertIn("Entrées SARIF brutes : 3", markdown)
+        self.assertIn("Exclu : suppression acceptée", markdown)
+        self.assertIn("Non bloquant", markdown)
+        self.assertIn("À vérifier", markdown)
+        self.assertNotIn("faille confirmée", markdown)
+
     def test_malicious_lizard_xml_entities_rejected(self):
         from defusedxml.common import DefusedXmlException
 
