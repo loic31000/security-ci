@@ -42,6 +42,27 @@ externe non fusionné :
 python3 scripts/release_readiness.py --evidence chemin/vers/preuves-verifiees.json
 ```
 
+L'objet `external_trial` doit aussi fournir des **preuves d'exécution sur
+runner**, pas seulement un statut textuel `success` :
+
+- `security_ci_ref` : le SHA exact du moteur, égal à `security_ci_commit` ;
+- `executed_jobs` : cinq entrées `semgrep`, `trivy`, `gitleaks`,
+  `zizmor` et `go_tests`, chacune avec `conclusion: "success"`,
+  `runner_name` non vide et `steps_executed >= 1` ;
+- `go_tests_passed >= 1` : nombre de tests Go réellement exécutés et
+  réussis, à relever dans les logs ;
+- `trivy_targets >= 1` : cible réellement reconnue dans l'inventaire
+  Trivy du dépôt externe, distincte de l'audit du moteur ;
+- `reports_verified` : `true` pour chacun des quatre rapports Semgrep,
+  Trivy, Gitleaks et zizmor, après inspection effective des artifacts.
+
+La provenance de ces informations doit être contrôlée manuellement à partir
+de GitHub (jobs, étapes, logs, SARIF et inventaire Trivy). Un job avec
+`runner_name=""` et `steps=[]` est **non exécuté** même si une valeur
+JSON ultérieure le présentait comme réussi. Le validateur refuse cette preuve
+incomplète ; il ne contacte pas GitHub et n'authentifie pas à lui seul les
+valeurs déclarées.
+
 Une pièce absente, un test inexécuté ou une branche externe fusionnée est
 traitée comme **non prêt**. Le JSON doit être construit **à partir de données
 GitHub consultées, puis vérifiées manuellement** : ce contrôle de complétude

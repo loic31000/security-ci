@@ -26,6 +26,15 @@ def evidence():
             "repo": "loic31000/local-agents",
             "branch": "audit/security-ci-fp-validation",
             "status": "success", "merged": False, "commit": SHA,
+            "security_ci_ref": SHA,
+            "executed_jobs": {
+                name: {"conclusion": "success", "runner_name": "Hosted Runner",
+                       "steps_executed": 4}
+                for name in module.EXTERNAL_JOBS
+            },
+            "go_tests_passed": 3,
+            "trivy_targets": 2,
+            "reports_verified": {name: True for name in module.EXTERNAL_REPORTS},
         },
         "security_ci_run_url": RUN,
         "tests_run_url": RUN,
@@ -51,6 +60,43 @@ class ReleaseReadinessTest(unittest.TestCase):
         record = evidence()
         record["external_trial"]["branch"] = "main"
         self.assertTrue(module.validate(record))
+
+    def test_failed_allocation_is_never_a_successful_external_trial(self):
+        for scanner in module.EXTERNAL_JOBS:
+            record = evidence()
+            record["external_trial"]["executed_jobs"][scanner]["steps_executed"] = 0
+            with self.subTest(scanner=scanner):
+                self.assertTrue(any("runner" in x for x in module.validate(record)))
+            record = evidence()
+            record["external_trial"]["executed_jobs"][scanner]["runner_name"] = ""
+            with self.subTest(scanner=scanner, case="no runner"):
+                self.assertTrue(any("runner" in x for x in module.validate(record)))
+
+    def test_all_external_jobs_must_have_succeeded(self):
+        record = evidence()
+        record["external_trial"]["executed_jobs"].pop("trivy")
+        self.assertTrue(any("trivy job" in x for x in module.validate(record)))
+        record = evidence()
+        record["external_trial"]["executed_jobs"]["go_tests"]["conclusion"] = "failure"
+        self.assertTrue(any("go_tests job" in x for x in module.validate(record)))
+
+    def test_real_go_tests_and_trivy_targets_required(self):
+        for field in ("go_tests_passed", "trivy_targets"):
+            for count in (0, -1, True, "1", None):
+                record = evidence()
+                record["external_trial"][field] = count
+                with self.subTest(field=field, count=count):
+                    self.assertTrue(any(field in x for x in module.validate(record)))
+
+    def test_external_scan_reports_and_pinned_engine_required(self):
+        record = evidence()
+        record["external_trial"]["security_ci_ref"] = "b" * 40
+        self.assertTrue(any("pin" in x for x in module.validate(record)))
+        for scanner in module.EXTERNAL_REPORTS:
+            record = evidence()
+            record["external_trial"]["reports_verified"][scanner] = False
+            with self.subTest(scanner=scanner):
+                self.assertTrue(any("reports" in x for x in module.validate(record)))
 
     def test_nonzero_alerts_dont_replace_manual_cve_review(self):
         record = evidence()
