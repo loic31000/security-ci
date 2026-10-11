@@ -1,4 +1,4 @@
-# Préparation d'une première version stable — critères vérifiables
+# Préparation d'une première version stable - critères vérifiables
 
 Ce document prépare une future version `v1.0.0` de **security-ci**, sans créer
 de tag, de release GitHub ou de déploiement.
