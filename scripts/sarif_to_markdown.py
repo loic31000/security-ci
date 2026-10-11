@@ -14,20 +14,21 @@ def clean(value, limit=1000):
     return html.escape(value, quote=False).replace("|", "\\|").replace("[", "\\[").replace("]", "\\]")
 
 
+def _safe_relative_uri(uri):
+    parsed = urlparse(uri)
+    return bool(uri and not parsed.scheme and not uri.startswith("/")
+                and "\\\\" not in uri and ".." not in Path(uri).parts)
+
+
 def location_for(result, repo, sha):
-    locations = result.get("locations") or []
-    for loc in locations:
+    for loc in result.get("locations") or []:
         physical = loc.get("physicalLocation") or {}
         artifact = physical.get("artifactLocation") or {}
         uri = unquote(artifact.get("uri") or "")
-        parsed = urlparse(uri)
-        if parsed.scheme or uri.startswith("/") or "\\" in uri:
-            continue
-        path = Path(uri)
-        if not uri or ".." in path.parts:
+        if not _safe_relative_uri(uri):
             continue
         line = (physical.get("region") or {}).get("startLine")
-        suffix = f"#L{int(line)}" if isinstance(line, int) and line > 0 else ""
+        suffix = f"#L{line}" if isinstance(line, int) and line > 0 else ""
         url = f"https://github.com/{repo}/blob/{sha}/{quote(uri, safe='/')}{suffix}" if repo and sha else ""
         return uri, line, url
     return "Emplacement non renseigné", None, ""
@@ -43,6 +44,39 @@ def sarif_status(result, level):
     return "À vérifier : résultat automatique non confirmé"
 
 
+def _entries(data, scanner, repo, sha):
+    records = []
+    for run in data["runs"]:
+        rules = ((run.get("tool") or {}).get("driver") or {}).get("rules") or []
+        by_id = {r.get("id"): r for r in rules if isinstance(r, dict)}
+        for result in run.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            rid = str(result.get("ruleId") or "Règle non précisée")
+            rule = by_id.get(rid, {})
+            level = result.get("level") or rule.get("defaultConfiguration", {}).get("level") or "non précisée"
+            raw = (result.get("message") or {}).get("text") or rule.get("shortDescription", {}).get("text") or ""
+            message = ("Secret potentiel détecté ; ouvrir le rapport SARIF (valeurs à traiter comme sensibles)."
+                       if scanner == "gitleaks" else raw)
+            records.append((rid, level, message, *location_for(result, repo, sha),
+                            sarif_status(result, level)))
+    return records
+
+
+def _format_entry(index, record):
+    rid, level, message, uri, line, url, status = record
+    lines = [f"## {index}. {clean(rid, 180)}", "",
+             f"- **Gravité SARIF :** {clean(level, 80)}",
+             f"- **Statut :** {status}",
+             f"- **Fichier :** {clean(uri, 320)}",
+             f"- **Ligne :** {line if line else 'non renseignée'}"]
+    if url:
+        lines.append(f"- **Voir le code :** [ouvrir dans GitHub]({url})")
+    lines.extend([f"- **Explication :** {clean(message) or 'Aucune description fournie par le scanner.'}",
+                  "- **À faire :** vérifier le contexte et confirmer ou écarter l'alerte avant une correction.", ""])
+    return lines
+
+
 def render(data, scanner, repo="", sha=""):
     runs = data.get("runs")
     if not isinstance(runs, list) or not runs:
@@ -52,35 +86,12 @@ def render(data, scanner, repo="", sha=""):
     lines = [f"# Rapport {scanner}", "", f"**Contrôle :** {title}.", "",
              "Les détections automatiques sont à vérifier, pas des vulnérabilités confirmées. Les suppressions acceptées et informations ne sont pas des alertes actives.",
              "Le rapport SARIF original reste disponible pour les outils.", ""]
-    records = []
-    for run in runs:
-        rules = ((run.get("tool") or {}).get("driver") or {}).get("rules") or []
-        by_id = {r.get("id"): r for r in rules if isinstance(r, dict)}
-        for result in run.get("results") or []:
-            if not isinstance(result, dict):
-                continue
-            rid = str(result.get("ruleId") or "Règle non précisée")
-            rule = by_id.get(rid, {})
-            level = result.get("level") or rule.get("defaultConfiguration", {}).get("level") or "non précisée"
-            raw_message = (result.get("message") or {}).get("text") or rule.get("shortDescription", {}).get("text") or ""
-            # Secret scanners can place credential values in messages. Never reproduce them.
-            message = ("Secret potentiel détecté ; ouvrir le rapport SARIF (valeurs à traiter comme sensibles)."
-                       if scanner == "gitleaks" else raw_message)
-            uri, line, url = location_for(result, repo, sha)
-            records.append((rid, level, message, uri, line, url, sarif_status(result, level)))
+    records = _entries(data, scanner, repo, sha)
     lines.extend([f"**Entrées SARIF brutes : {len(records)} (dont certaines peuvent être exclues ou informatives)**", ""])
     if not records:
         lines.extend(["Aucune alerte remontée dans le périmètre analysé.", ""])
-    for index, (rid, level, message, uri, line, url, status) in enumerate(records, 1):
-        lines.extend([f"## {index}. {clean(rid, 180)}", "",
-                      f"- **Gravité SARIF :** {clean(level, 80)}",
-                      f"- **Statut :** {status}",
-                      f"- **Fichier :** `{clean(uri, 320)}`",
-                      f"- **Ligne :** {line if line else 'non renseignée'}"])
-        if url:
-            lines.append(f"- **Voir le code :** [ouvrir dans GitHub]({url})")
-        lines.extend([f"- **Explication :** {clean(message) or 'Aucune description fournie par le scanner.'}",
-                      "- **À faire :** vérifier le contexte et confirmer ou écarter l'alerte avant une correction.", ""])
+    for index, record in enumerate(records, 1):
+        lines.extend(_format_entry(index, record))
     return "\n".join(lines) + "\n"
 
 

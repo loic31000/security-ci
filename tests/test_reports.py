@@ -61,6 +61,9 @@ class ReportsTest(unittest.TestCase):
                 "src/x.py": {"mi": 12.2}}))
             (root / "lizard.xml").write_text("<cppncss><measure type='Function'><labels><label>Nr.</label><label>NCSS</label><label>CCN</label></labels><item name='f'><value>1</value><value>20</value><value>17</value></item></measure></cppncss>")
             report = module.render(root)
+            self.assertIn("\n## Duplications jscpd", report)
+            self.assertIn("\n## Complexité Python", report)
+            self.assertNotIn(r"\n##", report)
             for needle in ("src/a.go", "12", "src/b.go", "42", "src/x.py", "complex", "15", "12.2"):
                 self.assertIn(needle, report)
 

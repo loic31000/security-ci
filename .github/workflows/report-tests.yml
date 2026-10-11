@@ -20,3 +20,11 @@ jobs:
         run: python -m pip install 'defusedxml==0.7.1'
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Prove certification on real executed JUnit tests
+        run: |
+          python -m pip install 'pytest==8.4.2'
+          mkdir -p .audit-tests
+          start_ns="$(python -c 'import time; print(time.time_ns())')"
+          python -m pytest tests -q --junitxml=.audit-tests/junit.xml
+          python scripts/test_report_validator.py --path .audit-tests/junit.xml \
+            --workspace "$GITHUB_WORKSPACE" --start-ns "$start_ns"

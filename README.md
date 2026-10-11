@@ -56,6 +56,32 @@ Les rapports Markdown distinguent désormais les alertes à vérifier, les
 exclusions acceptées et les autres entrées SARIF. L'artifact SARIF brut
 reste disponible pour la traçabilité.
 
+## Cibles Trivy et dépendances du moteur
+
+L'analyse Trivy du dépôt appelant produit **deux rapports complémentaires** :
+le SARIF des signalements et un inventaire JSON `trivy-targets.json`. Un
+inventaire JSON contenant zéro cible est affiché comme
+**« AUCUNE CIBLE RECONNUE : couverture non établie »**, et non comme une
+preuve que les dépendances ne contiennent aucune vulnérabilité. Une erreur
+d'inventaire bloque toujours le job. Les résultats restent filtrés aux niveaux
+HIGH/CRITICAL du scanner ; la présence d'une CVE n'est pas une exploitation
+confirmée.
+
+Pour le moteur `security-ci` lui-même, le workflow
+`.github/workflows/engine-dependencies.yml` résout dans un environnement de
+CI isolé les versions des outils Python (Semgrep, zizmor, Radon, Lizard,
+defusedxml), des dépendances npm de jscpd et du module Go de Gitleaks. Il
+génère les manifests `requirements.txt`, `package-lock.json` et `go.mod`,
+puis les soumet à Trivy. Il vérifie qu'au moins une cible a réellement été
+reconnue et **indique les familles non couvertes**. Les avis CVE restent
+informatifs jusqu'à revue humaine ; les erreurs techniques, inventaires
+absents et scans sans cibles échouent.
+
+Ces dépendances sont **résolues au moment de l'exécution**. Une analyse du
+moteur peut différer d'un runner à l'autre ; elle n'est pas une preuve de
+chaîne d'approvisionnement entièrement reproductible. Ne jamais présenter
+un rapport sans vulnérabilités comme une garantie de sécurité.
+
 ## Rapports de sécurité lisibles pour les développeurs
 
 Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
@@ -115,6 +141,12 @@ automatiquement. Aucun secret ni `secrets: inherit` n'est nécessaire.
 - Pas de publication automatique dans **Security → Code scanning** ni de
   commentaire sur les PR.
 
+Un audit **hebdomadaire** est également programmé chaque lundi (04 h 17 UTC)
+sur la branche par défaut, ainsi qu'un audit des dépendances du moteur
+(05 h 23 UTC). Les exécutions planifiées ne déclenchent aucun
+déploiement vers un autre dépôt. ShellCheck vérifie les scripts Bash
+de `security-ci` et échoue sur les avertissements de qualité.
+
 Dans `security-ci`, les push sur `main` et les PR déclenchent un audit du dépôt
 central. Un lancement manuel est également disponible dans Actions, avec le choix
 du mode. Les autres dépôts nécessitent leur propre workflow appelant.
@@ -155,6 +187,32 @@ couverture si aucun rapport n'est généré. **Sans `test_command`, le job écho
 dans un dépôt appelant pour éviter une validation trompeuse ; les tests échoués
 font aussi échouer le job. Seul `security-ci` lui-même exécute ses tests
 unitaires intégrés lorsque la commande n'est pas fournie.
+
+### Mode de certification stricte par rapport de tests JUnit
+
+Les dépôts appelants peuvent activer la vérification d'un **rapport JUnit XML**
+en complément de la commande de tests. Ce mode ne change pas les projets
+existants : il est volontairement **opt-in**.
+
+```yaml
+jobs:
+  security:
+    uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
+    permissions:
+      contents: read
+    with:
+      test_command: 'python -m pip install pytest && python -m pytest tests -q --junitxml=reports/junit.xml'
+      require_test_report: true
+      test_report_path: 'reports/junit.xml'
+```
+
+La certification échoue si le fichier est absent, situé hors du dépôt,
+ancien (non réécrit pendant ce job), trop volumineux, invalide, ou contient
+zéro `testcase`, un échec, une erreur ou un test ignoré. Son parseur XML
+utilise `defusedxml`. **Ce contrôle atteste la présence d'un rapport
+structuré cohérent ; il ne peut pas empêcher un script malveillant de
+fabriquer un faux rapport.** N'activer la commande que sur du code de
+confiance. Le chemin est relatif à la racine du dépôt appelant.
 
 ## Lire les rapports de maintenabilité, tests et couverture
 

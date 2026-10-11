@@ -1,0 +1,104 @@
+name: Engine dependency audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  engine-dependencies:
+    name: Resolved dependencies - Python, Node and Go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout central engine
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Setup Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - name: Resolve actually used tool dependencies
+        env:
+          MANIFESTS: ${{ runner.temp }}/security-engine-manifests
+        run: |
+          set -euo pipefail
+          mkdir -p "$MANIFESTS/python" "$MANIFESTS/node" "$MANIFESTS/go"
+          python -m venv "$RUNNER_TEMP/engine-py"
+          "$RUNNER_TEMP/engine-py/bin/python" -m pip install --disable-pip-version-check \
+            'semgrep==1.179.0' 'zizmor==1.30.1' 'radon==6.0.1' \
+            'lizard==1.17.10' 'defusedxml==0.7.1' 'pytest==8.4.2'
+          "$RUNNER_TEMP/engine-py/bin/python" -m pip freeze > "$MANIFESTS/python/requirements.txt"
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+            --prefix "$MANIFESTS/node" 'jscpd@4.0.5'
+          test -s "$MANIFESTS/node/package-lock.json"
+          go mod download -json github.com/zricethezav/gitleaks/v8@v8.30.1 > "$RUNNER_TEMP/gitleaks-module.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          m = json.loads((Path(os.environ["RUNNER_TEMP"]) / "gitleaks-module.json").read_text())
+          src = Path(m["GoMod"])
+          out = Path(os.environ["MANIFESTS"]) / "go" / "go.mod"
+          out.write_bytes(src.read_bytes())
+          pkg_sum = src.parent / "go.sum"
+          if pkg_sum.is_file():
+              (out.parent / "go.sum").write_bytes(pkg_sum.read_bytes())
+          PY
+          test -s "$MANIFESTS/python/requirements.txt"
+          test -s "$MANIFESTS/go/go.mod"
+      - name: Scan resolved manifests for known HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          scan-type: fs
+          scan-ref: ${{ runner.temp }}/security-engine-manifests
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/security-engine-manifests/trivy-engine.json
+          exit-code: '0'
+          ignore-unfixed: false
+          timeout: 15m
+          cache: false
+      - name: Verify target coverage and report potential CVEs
+        run: |
+          python scripts/toolchain_audit.py "$RUNNER_TEMP/security-engine-manifests" \
+            "$RUNNER_TEMP/security-engine-manifests/trivy-engine.json" | tee "$RUNNER_TEMP/toolchain-summary.txt"
+          {
+            echo '### Engine dependency coverage'
+            echo ''
+            echo 'This scan analyses freshly resolved dependency manifests for Python, Node (jscpd) and Go (Gitleaks).'
+            echo 'Potential CVEs require manual validation; a green workflow is not a claim of safety.'
+            echo ''
+            cat "$RUNNER_TEMP/toolchain-summary.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep dependency inventory and Trivy results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: engine-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/security-engine-manifests/python/requirements.txt
+            ${{ runner.temp }}/security-engine-manifests/node/package-lock.json
+            ${{ runner.temp }}/security-engine-manifests/go/go.mod
+            ${{ runner.temp }}/security-engine-manifests/go/go.sum
+            ${{ runner.temp }}/security-engine-manifests/trivy-engine.json
+          retention-days: 7
+          if-no-files-found: warn

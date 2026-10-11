@@ -11,6 +11,14 @@ on:
         description: Commande de tests du dépôt appelant (obligatoire pour les dépôts externes)
         type: string
         default: ''
+      require_test_report:
+        description: Exiger un fichier JUnit XML récent contenant au moins un test réussi (mode strict)
+        type: boolean
+        default: false
+      test_report_path:
+        description: Chemin relatif du fichier JUnit XML produit par test_command
+        type: string
+        default: ''
       coverage_paths:
         description: Chemins de rapports de couverture à archiver (optionnels, séparés par des retours à la ligne)
         type: string
@@ -21,6 +29,8 @@ on:
         description: Activer le mode strict
         type: boolean
         default: false
+  schedule:
+    - cron: '17 4 * * 1'
   push:
     branches: [main]
   pull_request:
@@ -105,6 +115,23 @@ jobs:
           cache: false
           cache-dir: ${{ runner.temp }}/trivy-cache
 
+      - name: Inventorier les cibles effectivement reconnues par Trivy
+        id: trivy_inventory
+        if: matrix.scanner == 'trivy' && steps.trivy.outcome == 'success'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/security-reports/trivy-targets.json
+          exit-code: '0'
+          timeout: 15m
+          cache: false
+
       - name: Analyser avec Semgrep, Gitleaks ou zizmor
         id: scan
         if: matrix.scanner != 'trivy'
@@ -140,7 +167,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 0ef82dff446e447c914fb1b9ac91fd496ce53a75
+          ref: 6c38b8bf65f7290b7d65387cfd55aa8a27947ff3
           path: .audit-decision-tools
           persist-credentials: false
 
@@ -149,6 +176,7 @@ jobs:
         env:
           SCAN_OUTCOME: ${{ steps.scan.outcome }}
           TRIVY_OUTCOME: ${{ steps.trivy.outcome }}
+          TRIVY_INVENTORY_OUTCOME: ${{ steps.trivy_inventory.outcome }}
         run: python3 .audit-decision-tools/scripts/sarif_decision.py
 
       - name: Charger le générateur de rapport Markdown
@@ -156,7 +184,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 25aed7a132b7424638f6094f18849b64d3927bc6
+          ref: 23b20834ed9d53c0987d19946909373f42ebc66a
           path: .audit-report-tools
           persist-credentials: false
 
@@ -172,8 +200,25 @@ jobs:
           path: |
             ${{ runner.temp }}/security-reports/*.sarif
             ${{ runner.temp }}/security-reports/*.md
+            ${{ runner.temp }}/security-reports/*.json
           retention-days: 7
           if-no-files-found: warn
+
+  shellcheck:
+    name: ShellCheck - Bash scripts
+    if: github.repository == 'loic31000/security-ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Analyze all engine shell scripts
+        run: |
+          shellcheck --version
+          shellcheck --severity=warning scripts/*.sh
 
   maintainability:
     name: Maintainability - duplication and Python metrics
@@ -218,7 +263,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 20faf42a7473dc8f86b243f6fde88f1ec4f36e5a
+          ref: 61896454a7df3e4959359cbf17ccc1e1fdd63abd
           path: .audit-report-tools
           persist-credentials: false
 
@@ -326,12 +371,40 @@ jobs:
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 
+      - name: Record certification start time
+        if: ${{ inputs.require_test_report && steps.test_config.outputs.caller_test == 'true' }}
+        run: python -c 'import time,os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"test-start.ns").write_text(str(time.time_ns()))'
+
       - name: Run caller-provided tests
         if: ${{ steps.test_config.outputs.caller_test == 'true' }}
         id: caller_tests
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
         run: bash --noprofile --norc -e -o pipefail -c "$TEST_COMMAND"
+
+      - name: Load strict JUnit verifier
+        if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: d625d95eecb7f2ab9bdf598c1a51a3581e4cb705
+          path: .audit-cert-tools
+          persist-credentials: false
+
+      - name: Certify at least one freshly executed JUnit test
+        if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
+        env:
+          TEST_REPORT_PATH: ${{ inputs.test_report_path }}
+        run: |
+          python -m pip install 'defusedxml==0.7.1'
+          python .audit-cert-tools/scripts/test_report_validator.py \
+            --path "$TEST_REPORT_PATH" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --start-ns "$(cat "$RUNNER_TEMP/test-start.ns")" | tee "$RUNNER_TEMP/junit-validation.txt"
+          {
+            echo '### Strict JUnit test certification'
+            cat "$RUNNER_TEMP/junit-validation.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Résumé des tests et de la couverture
         if: always()

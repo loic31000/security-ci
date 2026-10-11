@@ -1,0 +1,74 @@
+{
+  "source": "Extracts of SARIF 2.1.0 output from loic31000/security-ci GitHub Actions run 38121393947; reduced to structure without code or secrets.",
+  "scanners": {
+    "semgrep": {
+      "version": "2.1.0",
+      "runs": [
+        {
+          "tool": {
+            "driver": {
+              "name": "Semgrep OSS",
+              "rules": []
+            }
+          },
+          "invocations": [
+            {
+              "executionSuccessful": true,
+              "toolExecutionNotifications": []
+            }
+          ],
+          "results": []
+        }
+      ]
+    },
+    "trivy": {
+      "version": "2.1.0",
+      "runs": [
+        {
+          "tool": {
+            "driver": {
+              "name": "Trivy",
+              "rules": []
+            }
+          },
+          "results": [],
+          "columnKind": "utf16CodeUnits",
+          "originalUriBaseIds": {}
+        }
+      ]
+    },
+    "gitleaks": {
+      "version": "2.1.0",
+      "runs": [
+        {
+          "tool": {
+            "driver": {
+              "name": "gitleaks",
+              "rules": []
+            }
+          },
+          "results": []
+        }
+      ]
+    },
+    "zizmor": {
+      "version": "2.1.0",
+      "runs": [
+        {
+          "tool": {
+            "driver": {
+              "name": "zizmor",
+              "rules": []
+            }
+          },
+          "invocations": [
+            {
+              "executionSuccessful": true
+            }
+          ],
+          "results": []
+        }
+      ]
+    }
+  }
+}
