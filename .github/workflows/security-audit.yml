@@ -89,12 +89,18 @@ jobs:
           go-version: '1.25.x'
           cache: false
 
-      - name: Installer Gitleaks
+      - name: Charger le script de compilation Gitleaks
         if: matrix.scanner == 'gitleaks'
-        working-directory: ${{ runner.temp }}
-        run: |
-          GOBIN="$RUNNER_TEMP/security-bin" \
-            go install github.com/zricethezav/gitleaks/v8@v8.30.1
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 465ff2471dd53aa376efa2cf86c794b3e5b5dd25
+          path: .audit-gitleaks-build
+          persist-credentials: false
+
+      - name: Compiler Gitleaks avec ses dépendances corrigées
+        if: matrix.scanner == 'gitleaks'
+        run: bash .audit-gitleaks-build/scripts/build_gitleaks.sh "$RUNNER_TEMP/gitleaks-module" "$RUNNER_TEMP/security-bin"
 
       - name: Analyser avec Trivy
         id: trivy
@@ -156,11 +162,76 @@ jobs:
                 --no-banner
               ;;
             zizmor)
-              zizmor --offline --min-severity medium --format sarif \
+              zizmor --offline --strict-collection --min-severity medium --format sarif \
                 . > "$REPORT_DIR/zizmor.sarif"
               ;;
             *) exit 2 ;;
           esac
+
+      - name: Vérifier que Semgrep et Gitleaks détectent un problème contrôlé
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'gitleaks'
+        run: |
+          set -euo pipefail
+          fixture_dir="$RUNNER_TEMP/security-detection-canary"
+          mkdir -p "$fixture_dir"
+          if [[ "$SCANNER" == "semgrep" ]]; then
+            printf 'def unsafe(user_input):\n    eval(user_input)\n' > "$fixture_dir/unsafe.py"
+            semgrep scan --config p/security-audit --metrics off \
+              --disable-version-check --sarif \
+              --output "$fixture_dir/semgrep.sarif" "$fixture_dir/unsafe.py"
+          else
+            python3 - "$fixture_dir/canary.txt" <<'PY'
+          from pathlib import Path
+          import sys
+          # Synthetic, nonfunctional example; assembled only on ephemeral CI runner.
+          Path(sys.argv[1]).write_text(
+              'example = "' + 'ghp_' + 'wA9mK2pLxN4vRtQzY6bC8dEfGhJlM0oPq1rS' + '"\n'
+          )
+          PY
+            "$RUNNER_TEMP/security-bin/gitleaks" dir "$fixture_dir" \
+              --redact=100 --report-format sarif \
+              --report-path "$fixture_dir/gitleaks.sarif" \
+              --exit-code 0 --no-banner
+          fi
+          python3 - "$fixture_dir/$SCANNER.sarif" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          doc = json.loads(Path(sys.argv[1]).read_text())
+          findings = sum(len(run.get("results", [])) for run in doc.get("runs", []))
+          if findings < 1:
+              raise SystemExit("Detection canary failed: known synthetic finding was missed")
+          print(f"Detection canary succeeded: {findings} finding(s), no real secret used")
+          PY
+
+      - name: Vérifier une détection zizmor synthétique
+        if: matrix.scanner == 'zizmor'
+        run: |
+          set -euo pipefail
+          fixture_dir="$RUNNER_TEMP/zizmor-detection-canary"
+          mkdir -p "$fixture_dir/.github/workflows"
+          cat > "$fixture_dir/.github/workflows/insecure.yml" <<'YAML'
+          name: Deliberately insecure canary
+          on: pull_request_target
+          permissions: write-all
+          jobs:
+            canary:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - run: echo canary
+          YAML
+          zizmor --offline --min-severity medium --format sarif \
+            "$fixture_dir" > "$fixture_dir/result.sarif"
+          python3 - "$fixture_dir/result.sarif" <<'PY'
+          import json
+          import sys
+          doc = json.load(open(sys.argv[1]))
+          count = sum(len(r.get("results", [])) for r in doc.get("runs", []))
+          if count < 1:
+              raise SystemExit("zizmor missed deliberate insecure workflow")
+          print(f"zizmor canary: {count} expected warning(s) detected")
+          PY
 
       - name: Charger le validateur SARIF du moteur central
         if: always()
@@ -245,7 +316,35 @@ jobs:
       - name: Measure duplication
         run: |
           mkdir -p "$RUNNER_TEMP/maintainability"
-          npx --yes jscpd@4.0.5 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
+          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
+
+      - name: Verify exact duplicate detection with a synthetic clone
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/jscpd-positive-control"
+          mkdir -p "$fixture/source" "$fixture/reports"
+          python3 - "$fixture/source" <<'PY'
+          import sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          lines = ["def identical_function(value):"]
+          lines += [f"    number_{i} = value * {i} + (value % {i + 3})" for i in range(1, 32)]
+          lines.append("    return number_31")
+          body = "\n".join(lines) + "\n"
+          for name in ("sample_a.py", "sample_b.py"):
+              (root / name).write_text(body)
+          PY
+          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 \
+            --reporters json --output "$fixture/reports" --threshold 100 "$fixture/source"
+          python3 - "$fixture/reports/jscpd-report.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          duplicates = json.loads(Path(sys.argv[1]).read_text()).get("duplicates", [])
+          if not duplicates:
+              raise SystemExit("jscpd failed to report an identical 32-line function")
+          print(f"jscpd positive control: {len(duplicates)} exact clone(s) detected")
+          PY
 
       - name: Measure Python complexity and maintainability
         run: |

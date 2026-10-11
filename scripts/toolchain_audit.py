@@ -29,12 +29,19 @@ def summarize(directory, report):
                 raise ValueError("Malformed Trivy vulnerability result")
             findings.append((vuln["VulnerabilityID"], vuln.get("PkgName", "?"),
                              vuln.get("Severity", "UNKNOWN"), row["Target"]))
-    found = {name: any(name.split("/")[-1] in t for t in targets) for name in MANIFESTS}
+    # A recognized target is an exact manifest path, not an arbitrary substring.
+    normalized = {target.replace("\\\\", "/").removeprefix("./") for target in targets}
+    found = {name: name in normalized for name in MANIFESTS}
     missing_coverage = [name for name, matched in found.items() if not matched]
+    if missing_coverage:
+        raise ValueError(
+            "Trivy did not audit all required engine manifests: "
+            + ", ".join(missing_coverage)
+        )
     return {
-        "targets": len(set(targets)),
+        "targets": len(normalized),
         "vulnerabilities": findings,
-        "missing_coverage": missing_coverage,
+        "missing_coverage": [],
     }
 
 
