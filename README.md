@@ -64,6 +64,8 @@ jobs:
     uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
     with:
       enforce: false
+      # Exemple bloquant tant qu'une vraie commande adaptée au dépôt n'est pas fournie :
+      test_command: 'echo "Configurer les tests du projet" >&2; exit 1'
 ```
 
 Remplacer le marqueur par le SHA complet d'un commit validé de ce dépôt.
@@ -157,11 +159,29 @@ les chemins malveillants, les rapports vides et les métriques de maintenance.
 
 ## Déploiement
 
-Le script `scripts/rollout.sh` prépare des Pull Requests de déploiement
-sans modifier directement les branches principales. Il est en simulation
-par défaut ; `--apply` est nécessaire pour écrire. Il n'installe pas
-automatiquement de commandes de tests inconnues. Passer un SHA de référence
-du workflow central après validation et fusion.
+Le script `scripts/rollout.sh` prépare des Pull Requests **en brouillon**, sans
+modifier directement les branches principales. Chaque dépôt doit disposer d'une
+**commande de tests réelle**, déclarée volontairement dans un fichier JSON local :
+
+```json
+{
+  "loic31000/mon-projet": "npm ci && npm test"
+}
+```
+
+Pour simuler, puis proposer des PR uniquement sur les dépôts configurés :
+
+```bash
+./scripts/rollout.sh SHA_COMPLET_DU_WORKFLOW '' test-commands.json
+./scripts/rollout.sh SHA_COMPLET_DU_WORKFLOW --apply test-commands.json
+```
+
+Remplacer le marqueur par le SHA Git complet **validé** du workflow central.
+Sans commande pour un dépôt, celui-ci est **ignoré** ; `--apply` refuse de
+fonctionner sans fichier de configuration. Les commandes doivent tenir sur une
+ligne et être examinées avant utilisation. Ne jamais inclure de secret dans ce
+fichier, ni fusionner les PR sans vérifier leur CI. Une simulation ne modifie rien.
+Le script n'installe pas de dépendances inconnues et ne fusionne aucune PR.
 
 ## Participer et signaler un problème
 
