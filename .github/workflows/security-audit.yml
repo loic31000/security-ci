@@ -213,7 +213,7 @@ jobs:
               runs-on: ubuntu-latest
               steps:
                 - uses: actions/checkout@v4
-                - run: echo "\${{ github.event.pull_request.title }}"
+                - run: echo "${{ github.event.pull_request.title }}"
           YAML
           zizmor --offline --min-severity medium --format sarif \
             "$fixture_dir" > "$fixture_dir/result.sarif"
