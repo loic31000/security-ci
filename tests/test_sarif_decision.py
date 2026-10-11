@@ -64,6 +64,29 @@ class SarifDecisionTest(unittest.TestCase):
             with self.assertRaises(module.InvalidSarif):
                 module.assess(report([], extra=extra))
 
+    def test_configuration_error_must_fail_even_when_results_are_empty(self):
+        # OASIS SARIF 2.1.0 3.20.22: configuration error means the run failed.
+        data = report([], extra={"invocations": [{
+            "executionSuccessful": True,
+            "toolConfigurationNotifications": [{
+                "level": "error", "message": {"text": "Rules were not loaded"}
+            }]
+        }]})
+        with self.assertRaises(module.InvalidSarif):
+            module.assess(data)
+
+    def test_configuration_warning_is_not_a_failure(self):
+        data = report([], extra={"invocations": [{
+            "executionSuccessful": True,
+            "toolConfigurationNotifications": [{"level": "warning"}]
+        }]})
+        self.assertEqual(module.assess(data).candidate, 0)
+
+    def test_invocation_without_boolean_success_is_incomplete(self):
+        for bad in ({}, {"executionSuccessful": "true"}, {"executionSuccessful": False}):
+            with self.subTest(invocation=bad), self.assertRaises(module.InvalidSarif):
+                module.assess(report([], extra={"invocations": [bad]}))
+
     def test_missing_report_and_scanner_failure_not_clean(self):
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "scan.sarif"
