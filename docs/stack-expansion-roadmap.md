@@ -82,6 +82,18 @@ python3 scripts/semgrep_ruleset_compare.py \
   --output /chemin/prive/comparaison.json
 ```
 
+La CI réalise désormais aussi une **observation facultative** lorsque
+le YAML approuvé a déjà passé le contrôle d'intégrité : une seconde
+réponse du registre est récupérée dans le dossier temporaire, puis
+comparée par le même script épinglé. Seul
+`semgrep-rule-comparison.json` (compteurs agrégés sans identifiants)
+est inclus dans les artifacts ; le contenu brut est supprimé et n'est
+jamais une configuration de scanner. Si la seconde réponse est
+indisponible, n'est pas un JSON de règles, ou n'est pas comparable,
+le rapport porte `INCOMPARABLE` : **ne conclure ni équivalence ni dérive
+du contenu**. Cette observation n'a aucun effet sur le verdict sécurité,
+qui reste déterminé par le YAML et l'empreinte approuvés.
+
 **Important :** ce comparateur ne télécharge ni n'archive les règles, ne
 modifie pas les règles autorisées et n'est **jamais utilisé pour décider
 d'exécuter un scan**. L'égalité d'objets de règles ne prouve pas
