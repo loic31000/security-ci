@@ -94,7 +94,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 196d52edeeb4f8cfa557cd0799b80abe90f9425b
+          ref: 465ff2471dd53aa376efa2cf86c794b3e5b5dd25
           path: .audit-gitleaks-build
           persist-credentials: false
 
