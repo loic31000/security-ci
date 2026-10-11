@@ -11,6 +11,48 @@ les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
 | GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
 | Maintenabilité | jscpd + Radon + Lizard | Copies exactes suffisamment longues ; complexité Python et multi-langage |
 
+## Démarrage rapide — premier audit (exemple Go)
+
+Dans **votre dépôt Go** (avec votre accord), créez
+`.github/workflows/security.yml` :
+
+```yaml
+name: Security
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    uses: loic31000/security-ci/.github/workflows/security-audit.yml@e3c616b92c57725fd803013d3046939ed63a1c43
+    with:
+      enforce: false
+      test_command: 'go test ./...'
+```
+
+Cette révision est **épinglée à un commit dont les 10 contrôles CI ont réussi**,
+pas à une version `v1.0.0` publiée. Pour **Python, Node ou une autre stack**,
+remplacez la commande par celle qui exécute *vraiment* les tests de votre
+projet ; une commande vide fait échouer le job de tests. Ne remplacez pas
+la commande par `true` : ce ne serait pas une preuve de tests.
+
+1. Ouvrez la **Pull Request → Checks**, puis **Actions → exécution → Summary**.
+2. Pour les détails : **Artifacts → `security-semgrep-*`, `security-trivy-*`,
+   `security-gitleaks-*`, `security-zizmor-*`**, puis le fichier `.md`
+   dans l'archive. Les rapports bruts SARIF restent disponibles.
+3. Interprétez correctement le résultat :
+
+| Ce qui apparaît | Ce que cela signifie |
+| --- | --- |
+| **Alertes** et job vert avec `enforce: false` | Des signalements restent **à vérifier** : vert ne veut pas dire « aucune faille ». |
+| **Aucune cible reconnue** | Le scanner n'a pas établi la couverture ; ce n'est pas « zéro vulnérabilité ». |
+| **Erreur technique** (dont règles Semgrep indisponibles) | Le contrôle **échoue même avec `enforce: false`** ; lire l'artifact de diagnostic, ne pas ignorer l'échec. |
+
+Aucun secret ni `secrets: inherit` requis. L'exemple **n'installe rien
+dans vos autres dépôts** et ne modifie aucune protection de branche.
+Pour le mode bloquant et les tests certifiés, voir les sections ci-dessous.
+
 ## Lire les descriptions des audits
 
 Chaque contrôle de sécurité affiche maintenant une phrase simple dans le résumé GitHub Actions, juste avant son tableau **État / Alertes / Mode** :
@@ -283,31 +325,11 @@ avant correction. Un rapport Markdown n'est pas un audit manuel.
 Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
 un autre dépôt. Il analyse le dépôt appelant, pas uniquement `security-ci`.
 
-Exemple à installer **seulement après accord dans chaque projet** :
-
-```yaml
-name: Security
-on:
-  pull_request:
-  push:
-    branches: [main] # adapter à la branche principale du projet
-  workflow_dispatch:
-  schedule:
-    - cron: '0 4 * * 1'
-permissions:
-  contents: read
-jobs:
-  security:
-    uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
-    with:
-      enforce: false
-      # Exemple bloquant tant qu'une vraie commande adaptée au dépôt n'est pas fournie :
-      test_command: 'echo "Configurer les tests du projet" >&2; exit 1'
-```
-
-Remplacer le marqueur par le SHA complet d'un commit validé de ce dépôt.
-Le marqueur est volontairement inutilisable : aucun projet n'est installé
-automatiquement. Aucun secret ni `secrets: inherit` n'est nécessaire.
+Le **démarrage rapide ci-dessus** donne un exemple fonctionnel pour
+un projet Go. Pour les autres projets, adaptez `test_command` et choisissez
+une révision validée. Les déclencheurs `push` ou `schedule` restent
+facultatifs : ne les activez qu'après accord dans chaque dépôt.
+Aucun dépôt appelant n'est configuré automatiquement.
 
 ## Modes et résultats
 
