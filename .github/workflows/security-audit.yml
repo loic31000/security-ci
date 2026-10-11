@@ -316,6 +316,59 @@ jobs:
           shellcheck --version
           shellcheck --severity=warning scripts/*.sh
 
+  actionlint:
+    name: actionlint - GitHub Actions syntax and expressions
+    if: github.repository == 'loic31000/security-ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout only Security CI
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Install SHA-256 verified actionlint v1.7.12
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/actionlint-verified"
+          curl --fail --silent --show-error --location --retry 3 \
+            --connect-timeout 20 --max-time 90 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint-verified/release.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint-verified/release.tar.gz" \
+            | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/actionlint-verified/release.tar.gz" \
+            -C "$RUNNER_TEMP/actionlint-verified" actionlint
+          "$RUNNER_TEMP/actionlint-verified/actionlint" -version
+      - name: Lint all Security CI GitHub Actions workflows
+        run: "$RUNNER_TEMP/actionlint-verified/actionlint .github/workflows/*.yml"
+      - name: Verify actionlint detects an invalid workflow
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/actionlint-verified/invalid.yml" <<'YAML'
+          name: Invalid test workflow
+          on: push
+          jobs:
+            broken:
+              runs-on: ubuntu-latest
+              steps:
+                - run: echo canary
+                  timeout-minutes: invalid_number
+          YAML
+          if "$RUNNER_TEMP/actionlint-verified/actionlint" \
+            "$RUNNER_TEMP/actionlint-verified/invalid.yml" \
+            > "$RUNNER_TEMP/actionlint-verified/canary.log" 2>&1; then
+            echo "::error::actionlint did not reject invalid workflow input"
+            exit 1
+          fi
+          grep -q 'timeout-minutes' "$RUNNER_TEMP/actionlint-verified/canary.log" || {
+            cat "$RUNNER_TEMP/actionlint-verified/canary.log"
+            echo "::error::actionlint did not flag the expected invalid field"
+            exit 1
+          }
+          echo "actionlint positive control detected intentionally invalid timeout-minutes"
+
   maintainability:
     name: Maintainability - duplication and Python metrics
     runs-on: ubuntu-24.04
