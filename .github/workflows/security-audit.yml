@@ -107,8 +107,15 @@ jobs:
           bundle="$RUNNER_TEMP/semgrep-approved/rules.yaml"
           verified=false
           for attempt in 1 2 3; do
+            # Registry may negotiate JSON despite YAML being the reviewed form.
+            # Content types are requests, NOT exceptions to the SHA-256 check.
+            case "$attempt" in
+              1) accept="application/x-yaml" ;;
+              2) accept="text/yaml" ;;
+              3) accept="application/json" ;;
+            esac
             if curl --fail --silent --show-error --location --retry 2 \
-                --connect-timeout 20 --max-time 90 -H 'Accept: application/json' \
+                --connect-timeout 20 --max-time 90 -H "Accept: $accept" \
                 https://semgrep.dev/c/p/security-audit \
                 --output "$bundle" &&
                 python3 .audit-python-lock/scripts/verify_semgrep_bundle.py \
