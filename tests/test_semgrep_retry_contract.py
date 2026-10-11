@@ -17,6 +17,9 @@ class SemgrepRegistryRetryTest(unittest.TestCase):
         )[0]
         self.assertIn("for attempt in 1 2 3; do", part)
         self.assertIn("if curl --fail --silent", part)
+        for mime in ("application/x-yaml", "text/yaml", "application/json"):
+            self.assertIn(f'accept="{mime}"', part)
+        self.assertIn('-H "Accept: $accept"', part)
         self.assertIn("&&\n                python3 .audit-python-lock/scripts/verify_semgrep_bundle.py", part)
         self.assertIn(".audit-python-lock/locks/semgrep-security-audit.json", part)
         # Diagnostic may be collected between the fail-closed branch and the
