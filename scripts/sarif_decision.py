@@ -99,10 +99,17 @@ def main():
     enforce = os.environ.get("ENFORCE", "false").lower() == "true"
     report = Path(os.environ["REPORT_DIR"]) / f"{scanner}.sarif"
     counts = None
+    trivy_coverage = None
     failed = False
     try:
         counts, failed = decide(report, outcome, enforce)
+        if scanner == "trivy":
+            if os.environ.get("TRIVY_INVENTORY_OUTCOME") != "success":
+                raise InvalidSarif("Trivy target discovery did not succeed")
+            from trivy_coverage import read_inventory
+            trivy_coverage = read_inventory(Path(os.environ["REPORT_DIR"]) / "trivy-targets.json")
     except (InvalidSarif, OSError, ValueError, TypeError, KeyError):
+        counts = None
         failed = True
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
         summary.write(f"### Audit : {scanner}\n\n")
@@ -114,6 +121,15 @@ def main():
             summary.write("|---:|---:|---:|---|\n")
             summary.write(f"| {counts.candidate} | {counts.suppressed} | {counts.other} | {'strict' if enforce else 'rapport'} |\n\n")
             summary.write("Seules les suppressions acceptées sont exclues ; une revue en cours reste active.\n")
+
+            if scanner == "trivy" and trivy_coverage:
+                state, targets = trivy_coverage
+                if state == "NOT_APPLICABLE":
+                    summary.write("**AUCUNE CIBLE RECONNUE PAR TRIVY : couverture non établie.** "
+                                  "Un résultat sans alerte ne prouve pas que les dépendances sont sûres.\\n")
+                else:
+                    summary.write(f"**Cibles reconnues par Trivy : {targets}.** "
+                                  "Les résultats ne couvrent que ces cibles et filtres.\\n")
         summary.write("\nConsulter le SARIF, confirmer le contexte et la pertinence avant toute correction.\n")
     return 1 if failed else 0
 
