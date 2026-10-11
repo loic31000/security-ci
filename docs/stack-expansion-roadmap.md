@@ -38,7 +38,10 @@ Lorsque les trois tentatives du registre échouent à obtenir les **225 règles
 à l'empreinte SHA-256 approuvée**, le scan reste en **échec technique**.
 L'artifact d'échec `security-semgrep-*` peut maintenant contenir
 `semgrep-registry-drift.json` avec seulement : SHA approuvé/observé,
-taille, nombre d'IDs lus, nombre d'IDs distincts et empreinte d'IDs triés.
+taille, format observé (YAML/JSON/inconnu), nombre d'IDs lus,
+nombre d'IDs distincts et empreinte d'IDs triés. Une réponse JSON peut
+être examinée **pour le diagnostic seulement** : elle ne correspond pas à
+l'empreinte du profil YAML approuvé et ne sera jamais exécutée.
 **Aucun texte de règle, message, identifiant de règle ou extrait de code
 n'est reproduit.** Cette preuve sert à différencier la dérive des règles,
 les réponses malformées et les problèmes d'infrastructure. Elle **ne
