@@ -109,7 +109,7 @@ def summarize(workspace, inventory):
     for family, pattern, typ in SUPPORTED:
         declared = {p for p in found if fnmatchcase(PurePosixPath(p).name, pattern)}
         scanned = {p for p in declared
-                   if (p, typ, "lang-pkgs") in observed
+                   if (p, typ, "lang-pkgs") in observed}
         hint_present = any(
             any(name == candidate for candidate in files if not candidate.startswith("*"))
             for p, name in hints for fam, files in HINTS if fam == family
