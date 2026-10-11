@@ -27,13 +27,13 @@ Pas besoin d'installer Semgrep, Trivy, Gitleaks ou zizmor dans le dépôt. L'exe
 
 ## 2. Installer Security CI en 4 étapes
 
-**Étape 1 —** Dans votre dépôt GitHub, créez une branche de travail, puis ouvrez **Add file → Create new file**. Dans le nom du fichier, saisissez :
+**Étape 1 -** Dans votre dépôt GitHub, créez une branche de travail, puis ouvrez **Add file → Create new file**. Dans le nom du fichier, saisissez :
 
 ```text
 .github/workflows/security.yml
 ```
 
-**Étape 2 —** Collez cet exemple **pour un projet Go** :
+**Étape 2 -** Collez cet exemple **pour un projet Go** :
 
 ```yaml
 name: Security
@@ -54,7 +54,7 @@ jobs:
 
 La longue référence après `@` est un **commit précis déjà validé**, pour éviter qu'une mise à jour du moteur modifie silencieusement vos audits. Ce n'est **pas** une version publiée.
 
-**Étape 3 —** Adaptez **uniquement `test_command`** à votre projet :
+**Étape 3 -** Adaptez **uniquement `test_command`** à votre projet :
 
 | Votre projet | Exemple de commande, à adapter |
 | --- | --- |
@@ -64,7 +64,7 @@ La longue référence après `@` est un **commit précis déjà validé**, pour 
 
 Vérifiez d'abord que cette commande fonctionne sur votre projet. La commande est exécutée **dans le dépôt audité**, dans un job séparé ; Security CI ne peut pas deviner comment installer ou tester votre application. **Sans `test_command`, le job de tests d'un dépôt externe échoue.** Ne mettez jamais `true` ou une commande fictive pour le faire passer au vert.
 
-**Étape 4 —** Enregistrez le fichier, ouvrez une **Pull Request** et consultez ses contrôles dans l'onglet **Checks**. Vous pouvez aussi ouvrir **Actions → Security** et lancer `workflow_dispatch` sur une branche où ce workflow existe.
+**Étape 4 -** Enregistrez le fichier, ouvrez une **Pull Request** et consultez ses contrôles dans l'onglet **Checks**. Vous pouvez aussi ouvrir **Actions → Security** et lancer `workflow_dispatch` sur une branche où ce workflow existe.
 
 L'ajout du workflow ne modifie pas vos fichiers applicatifs et ne déploie rien. Les protections de branche et le blocage des fusions restent des réglages GitHub distincts.
 
@@ -141,10 +141,10 @@ Adaptez les dépendances et le chemin à votre projet. Le rapport doit être **n
 
 ## 6. Aller plus loin
 
-- [Référence technique et maintenance](docs/technical-reference.md) — formats SARIF, règles, dépendances verrouillées, preuves des scanners, options avancées et limites.
-- [Exemple commenté de rapport](docs/EXAMPLE-REPORT.md) — vérifier une alerte sans confondre détection et vulnérabilité confirmée.
-- [Critères de préparation d'une version stable](docs/release-readiness.md) — la version `v1.0.0` **n'est pas publiée**.
-- [Feuille de route](docs/stack-expansion-roadmap.md) — **nouvelles fonctionnalités gelées** ; priorité à la simplicité et à la stabilité.
+- [Référence technique et maintenance](docs/technical-reference.md) - formats SARIF, règles, dépendances verrouillées, preuves des scanners, options avancées et limites.
+- [Exemple commenté de rapport](docs/EXAMPLE-REPORT.md) - vérifier une alerte sans confondre détection et vulnérabilité confirmée.
+- [Critères de préparation d'une version stable](docs/release-readiness.md) - la version `v1.0.0` **n'est pas publiée**.
+- [Feuille de route](docs/stack-expansion-roadmap.md) - **nouvelles fonctionnalités gelées** ; priorité à la simplicité et à la stabilité.
 - [Contribuer](CONTRIBUTING.md) · [Signaler une faille de sécurité](SECURITY.md) · [Licence MIT](LICENSE).
 
 **Limites à connaître :** l'outil n'est pas un audit humain, n'assure ni 100 % de détection ni zéro faux positif. Il n'envoie pas automatiquement de résultats dans GitHub Code scanning et ne commente pas les PR. Les runners GitHub et les artifacts peuvent générer des coûts ou consommer des quotas, notamment dans les dépôts privés.

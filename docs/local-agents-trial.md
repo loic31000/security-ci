@@ -1,4 +1,4 @@
-# Essai réel sur local-agents — branche strictement non fusionnable
+# Essai réel sur local-agents - branche strictement non fusionnable
 
 **Objet :** évaluer le moteur `security-ci` sur un vrai projet
 Go/Python/React, sans modifier ni fusionner `local-agents/main`.

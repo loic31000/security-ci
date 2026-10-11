@@ -1,6 +1,6 @@
 # Feuille de route : calibration des scanners puis couverture multi-stacks
 
-## Priorité actuelle — fiabilité démontrable (P0)
+## Priorité actuelle - fiabilité démontrable (P0)
 
 La CI doit vérifier la **qualité du moteur d'audit**, et non attribuer automatiquement
 des vulnérabilités confirmées aux projets analysés.
@@ -32,7 +32,7 @@ fixtures indépendantes en nombre suffisant pour mesurer séparément : les chem
 sur code bénin, les erreurs de configuration, les exclusions et les changements
 de versions, avec revue humaine de tout échec inattendu.
 
-## Diagnostic de provenance Semgrep — blocage P0
+## Diagnostic de provenance Semgrep - blocage P0
 
 Lorsque les trois tentatives du registre échouent à obtenir les **225 règles
 à l'empreinte SHA-256 approuvée**, le scan reste en **échec technique**.
@@ -77,7 +77,7 @@ Si le fournisseur ne le fournit pas, le job reste en échec explicite
 L'incident de disponibilité #29 reste ouvert ; aucune approbation
 automatique du JSON, aucune redistribution des règles.
 
-## Étape suivante — étendre les stacks sans créer de faux « zéro alerte » (P1)
+## Étape suivante - étendre les stacks sans créer de faux « zéro alerte » (P1)
 
 Ordre proposé, **à réévaluer avec les usages réels** :
 
@@ -103,7 +103,7 @@ activation d'une famille devra établir :
 - Comparaison d'un essai sur branche isolée avec une baseline connue, sans
   fusionner des changements dans le dépôt d'essai.
 
-## Preuves généralisées de couverture des dépendances — phase P0/P1
+## Preuves généralisées de couverture des dépendances - phase P0/P1
 
 Le job Trivy du workflow réutilisable produit désormais un artifact
 `stack-coverage.json` fondé sur les **noms des manifests du dépôt appelant**
@@ -131,7 +131,7 @@ Le code effectif est épinglé par SHA et comparé au script testé sur PR.
 Les familles non encore vérifiées restent explicitement hors couverture,
 notamment les projets .NET sans preuve NuGet.
 
-### Lot A.1 — contrôle réel Java/Gradle sur deux verrous (Trivy v0.70.0)
+### Lot A.1 - contrôle réel Java/Gradle sur deux verrous (Trivy v0.70.0)
 
 Le job `engine-dependencies` audite deux `gradle.lockfile` **synthétiques**
 dans `RUNNER_TEMP`, indépendamment des dépôts appelants. La paire comprend
@@ -151,7 +151,7 @@ dépendances transitives complètes.** Trivy peut résoudre des dépendances
 Maven via réseau ; une erreur HTTP 429 ou un graphe tronqué devra être
 signalé distinctement dans le futur lot A.2.
 
-### Lot A.2 — preuve Maven POM à qualifier
+### Lot A.2 - preuve Maven POM à qualifier
 
 Le moteur expérimente deux scans Trivy séparés sur des `pom.xml`
 synthétiques : Log4j 2.14.1 comme contrôle positif, et SLF4J 2.0.17
