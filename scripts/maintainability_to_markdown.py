@@ -100,7 +100,7 @@ def render(root):
                     _python_maintainability_report, _lizard_report):
         lines.extend(section(root))
     lines.extend(["", "Rapports sources : fichiers JSON/XML dans le même artifact.", ""])
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 
