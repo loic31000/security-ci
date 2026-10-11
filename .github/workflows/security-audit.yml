@@ -857,7 +857,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 226bb005f4be2c93d43d7419814c3ed6764efbdf
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
           path: .audit-python-lock
           persist-credentials: false
 
