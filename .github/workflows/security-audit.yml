@@ -677,7 +677,26 @@ jobs:
       - name: Measure duplication
         run: |
           mkdir -p "$RUNNER_TEMP/maintainability"
-          "$RUNNER_TEMP/security-jscpd/node_modules/.bin/jscpd" --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
+          "$RUNNER_TEMP/security-jscpd/node_modules/.bin/jscpd" --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**,**/.git/**,**/.audit-python-lock/**,**/.audit-jscpd-tools/**,**/.audit-report-tools/**' .
+
+      - name: Reject duplication reports contaminated by engine checkouts
+        run: |
+          python3 - "$RUNNER_TEMP/maintainability/jscpd-report.json" <<'PY'
+          import json
+          import sys
+          from pathlib import PurePosixPath
+          report = json.load(open(sys.argv[1], encoding="utf-8"))
+          duplicates = report.get("duplicates")
+          if not isinstance(duplicates, list):
+              raise SystemExit("jscpd: missing duplicate inventory")
+          generated = {".git", ".audit-python-lock", ".audit-jscpd-tools",
+                       ".audit-report-tools"}
+          for duplicate in duplicates:
+              for key in ("firstFile", "secondFile"):
+                  path = duplicate.get(key, {}).get("name", "")
+                  if set(PurePosixPath(path).parts) & generated:
+                      raise SystemExit("jscpd: generated checkout included in report")
+          PY
 
       - name: Verify exact duplicate detection with a synthetic clone
         run: |
@@ -745,7 +764,22 @@ jobs:
 
       - name: Measure multi-language complexity
         run: |
-          lizard --xml . > "$RUNNER_TEMP/maintainability/lizard.xml"
+          lizard --xml . -x './.git/*' -x './.audit-python-lock/*' \
+            -x './.audit-jscpd-tools/*' -x './.audit-report-tools/*' \
+            > "$RUNNER_TEMP/maintainability/lizard.xml"
+
+      - name: Reject complexity metrics contaminated by engine checkouts
+        run: |
+          python3 - "$RUNNER_TEMP/maintainability/lizard.xml" <<'PY'
+          import sys
+          from defusedxml import ElementTree as ET
+          root = ET.parse(sys.argv[1])
+          forbidden = ("./.git/", "./.audit-python-lock/",
+                       "./.audit-jscpd-tools/", "./.audit-report-tools/")
+          names = [item.get("name", "") for item in root.findall(".//measure/item")]
+          if not names or any(f" at {path}" in name for name in names for path in forbidden):
+              raise SystemExit("Lizard: no functions or generated checkout included")
+          PY
 
       - name: Charger le générateur Markdown de maintenabilité
         if: always()
