@@ -16,13 +16,13 @@ jobs:
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
         with:
           python-version: '3.12'
-      - name: Install report parser dependency
-        run: python -m pip install 'defusedxml==0.7.1'
+      - name: Install report testing dependencies with exact SHA-256 hashes
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r locks/python-report-tests.txt
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Prove certification on real executed JUnit tests
         run: |
-          python -m pip install 'pytest==8.4.2'
           mkdir -p .audit-tests
           start_ns="$(python -c 'import time; print(time.time_ns())')"
           python -m pytest tests -q --junitxml=.audit-tests/junit.xml
