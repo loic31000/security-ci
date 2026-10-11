@@ -45,9 +45,10 @@ jobs:
             --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir \
             -r locks/python-tools.txt
           "$RUNNER_TEMP/engine-py/bin/python" -m pip freeze > "$MANIFESTS/python/requirements.txt"
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
-            --prefix "$MANIFESTS/node" 'jscpd@5.4.1'
-          test -s "$MANIFESTS/node/package-lock.json"
+          # Install the same integrity-verified jscpd graph used by maintainability.
+          bash scripts/install_jscpd.sh "$RUNNER_TEMP/engine-jscpd"
+          cp locks/jscpd/package-lock.json "$MANIFESTS/node/package-lock.json"
+          cmp -s locks/jscpd/package-lock.json "$MANIFESTS/node/package-lock.json"
           bash scripts/build_gitleaks.sh "$MANIFESTS/go" "$RUNNER_TEMP/engine-gitleaks-bin"
           test -s "$MANIFESTS/python/requirements.txt"
           test -s "$MANIFESTS/go/go.mod"

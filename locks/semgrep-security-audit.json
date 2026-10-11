@@ -1,0 +1,8 @@
+{
+  "source": "https://semgrep.dev/c/p/security-audit",
+  "format": "yaml",
+  "rule_count": 225,
+  "sha256": "b109a039df712f30c6d3e25e1e8358053fd0f1c91b92d0e8d2871cd141fe602f",
+  "verified_on": "2026-10-11",
+  "review_note": "Exact public Semgrep Registry response, verified from real GitHub Actions public artifact. Change only after reviewing rules and re-testing canary."
+}
