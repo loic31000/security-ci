@@ -342,7 +342,8 @@ jobs:
             -C "$RUNNER_TEMP/actionlint-verified" actionlint
           "$RUNNER_TEMP/actionlint-verified/actionlint" -version
       - name: Lint all Security CI GitHub Actions workflows
-        run: "$RUNNER_TEMP/actionlint-verified/actionlint .github/workflows/*.yml"
+        run: |
+          "$RUNNER_TEMP/actionlint-verified/actionlint" .github/workflows/*.yml
       - name: Verify actionlint detects an invalid workflow
         run: |
           set -euo pipefail
