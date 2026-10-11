@@ -48,16 +48,27 @@ class ManifestEvidenceTest(unittest.TestCase):
         with self.assertRaisesRegex(module.EvidenceError, "bad SHA"):
             module.verify_manifests(self.root, invalid)
 
-    def test_valid_cyclonedx_has_real_components(self):
+    def test_cyclonedx_real_trivy_shape_with_unversioned_roots(self):
         data = {
             "bomFormat": "CycloneDX", "specVersion": "1.6",
             "components": [
+                {"type": "application", "name": name}
+                for name in module.EXPECTED if name != "go/go.sum"
+            ] + [
                 {"type": "library", "name": "semgrep", "version": "1.179.0"},
                 {"type": "library", "name": "jscpd", "version": "5.4.1"},
-                {"type": "library", "name": "gitleaks", "version": "8.30.1"},
-            ]
+                {"type": "library", "name": "example.com/security-ci-gitleaks-build"},
+            ],
         }
-        self.assertEqual(module.verify_cyclonedx(data), 3)
+        self.assertEqual(module.verify_cyclonedx(data), 6)
+
+    def test_cyclonedx_missing_root_is_not_full_coverage(self):
+        data = {"bomFormat": "CycloneDX", "specVersion": "1.6",
+                "components": [{"type": "application", "name": "go/go.mod"},
+                               {"type": "application", "name": "python/requirements.txt"},
+                               {"type": "library", "name": "semgrep", "version": "1.179.0"}]}
+        with self.assertRaisesRegex(module.EvidenceError, "missing one or more"):
+            module.verify_cyclonedx(data)
 
     def test_empty_or_invalid_sbom_never_passes(self):
         examples = (
