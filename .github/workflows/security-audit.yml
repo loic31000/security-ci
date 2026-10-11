@@ -142,6 +142,10 @@ jobs:
           if curl --fail --silent --show-error --location \
               --connect-timeout 10 --max-time 35 -H 'Accept: application/json' \
               https://semgrep.dev/c/p/security-audit --output "$response"; then
+            # Record only format, size, counts and anonymous hashes for triage.
+            python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
+              "$response" .audit-python-lock/locks/semgrep-security-audit.json \
+              "$REPORT_DIR/semgrep-registry-observation.json"
             PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
               python3 .audit-drift-tools/scripts/semgrep_ruleset_compare.py \
                 --approved-yaml "$RUNNER_TEMP/semgrep-approved/rules.yaml" \
