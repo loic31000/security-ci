@@ -11,7 +11,7 @@ SHA = "a" * 40
 
 
 class RolloutTest(unittest.TestCase):
-    def run_rollout(self, args, commands=None):
+    def run_rollout(self, args, commands=None, discovery_error=False):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             fake_bin = root / "bin"
@@ -19,7 +19,8 @@ class RolloutTest(unittest.TestCase):
             gh = fake_bin / "gh"
             gh.write_text(
                 "#!/usr/bin/env bash\n"
-                "if [[ \"$1\" == api && \"$2\" == user/repos* ]]; then\n"
+                + ("exit 17\n" if discovery_error else "")
+                + "if [[ \"$1\" == api && \"$2\" == user/repos* ]]; then\n"
                 "  printf 'security-ci\\tmain\\tfalse\\tfalse\\n"
                 "example\\tmain\\tfalse\\tfalse\\n"
                 "no-tests\\tmain\\tfalse\\tfalse\\n'\n"
@@ -56,6 +57,12 @@ class RolloutTest(unittest.TestCase):
         result = self.run_rollout(["--apply"])
         self.assertEqual(result.returncode, 2)
         self.assertIn("Refusing --apply", result.stderr)
+
+    def test_repo_discovery_failure_is_an_error(self):
+        # A failed gh discovery must not produce a successful rollout.
+        result = self.run_rollout([""], {"loic31000/example": "npm test"}, discovery_error=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rollout aborted without writes", result.stderr)
 
     def test_invalid_config_rejected(self):
         result = self.run_rollout(["--apply"], {"loic31000/example": ["npm test"]})
