@@ -87,6 +87,15 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-tools.txt"
 
+      - name: Load SHA-pinned non-sensitive Semgrep drift diagnostics
+        if: matrix.scanner == 'semgrep'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 3b5bf13819d5a998c89fb546088c902a6143658c
+          path: .audit-drift-tools
+          persist-credentials: false
+
       - name: Verify exact reviewed Semgrep rules before use
         if: matrix.scanner == 'semgrep'
         run: |
@@ -111,6 +120,11 @@ jobs:
             if (( attempt < 3 )); then sleep "$attempt"; fi
           done
           if [[ "$verified" != "true" ]]; then
+            # Only hashes, counts and anonymous identifier digests are saved.
+            # The unauthorized YAML never leaves the ephemeral runner.
+            python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
+              "$bundle" .audit-python-lock/locks/semgrep-security-audit.json \
+              "$REPORT_DIR/semgrep-registry-drift.json"
             echo "::error::The reviewed Semgrep ruleset is unavailable. Fail closed; review the registry drift separately."
             exit 1
           fi
