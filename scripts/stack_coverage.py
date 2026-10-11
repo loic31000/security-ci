@@ -8,15 +8,16 @@ import argparse
 import json
 import os
 from pathlib import Path, PurePosixPath
+from fnmatch import fnmatchcase
 
-# (family, exact manifest basename, exact Trivy analyzer type)
+# (family, supported manifest filename pattern, exact Trivy analyzer type)
 SUPPORTED = (
     ("go-modules", "go.mod", "gomod"),
     ("python-pip", "requirements.txt", "pip"),
     ("node-npm", "package-lock.json", "npm"),
     ("node-pnpm", "pnpm-lock.yaml", "pnpm"),
     ("java-maven", "pom.xml", "pom"),
-    ("java-gradle", "gradle.lockfile", "gradle"),
+    ("java-gradle", "*gradle.lockfile", "gradle"),
     ("rust-cargo", "Cargo.lock", "cargo"),
     ("ruby-bundler", "Gemfile.lock", "bundler"),
     ("php-composer", "composer.lock", "composer"),
@@ -47,7 +48,7 @@ def normalized(value):
     pure = PurePosixPath(path)
     if pure.is_absolute() or not path or any(p in ("", ".", "..") for p in path.split("/")):
         raise CoverageError("unsafe or malformed Trivy target path")
-    if "://" in path or path.startswith("~"):
+    if "://" in path or path.startswith("~") or (len(path) > 1 and path[1] == ":"):
         raise CoverageError("untrusted Trivy target path")
     return pure.as_posix()
 
@@ -84,7 +85,7 @@ def expected_manifests(root):
                       and not d.startswith(".audit-")
                       and not (Path(directory) / d).is_symlink()]
         for name in files:
-            is_manifest = any(name == f for _, f, _ in SUPPORTED)
+            is_manifest = any(fnmatchcase(name, pattern) for _, pattern, _ in SUPPORTED)
             is_hint = (any(name in fs for _, fs in HINTS)
                        or (name.endswith(".csproj") and name != ".csproj"))
             if not (is_manifest or is_hint):
@@ -105,11 +106,10 @@ def summarize(workspace, inventory):
     observed = observed_targets(inventory)
     by_family = {}
     incomplete = False
-    for family, basename, typ in SUPPORTED:
-        declared = {p for p in found if PurePosixPath(p).name == basename}
+    for family, pattern, typ in SUPPORTED:
+        declared = {p for p in found if fnmatchcase(PurePosixPath(p).name, pattern)}
         scanned = {p for p in declared
-                   if (p, typ, "lang-pkgs") in observed
-                   or (p, typ, None) in observed}
+                   if (p, typ, "lang-pkgs") in observed}
         hint_present = any(
             any(name == candidate for candidate in files if not candidate.startswith("*"))
             for p, name in hints for fam, files in HINTS if fam == family

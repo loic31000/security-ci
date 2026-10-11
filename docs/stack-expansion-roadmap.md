@@ -86,7 +86,7 @@ Le job Trivy du workflow réutilisable produit désormais un artifact
 `stack-coverage.json` fondé sur les **noms des manifests du dépôt appelant**
 et les **cibles réellement reconnues** dans `trivy-targets.json`.
 Pour chaque famille reconnue (Go modules, Python requirements, npm, pnpm,
-Maven `pom.xml`, Gradle lock, Cargo.lock, Gemfile.lock, composer.lock),
+Maven `pom.xml`, Gradle `*gradle.lockfile`, Cargo.lock, Gemfile.lock, composer.lock),
 le script distingue :
 
 - `SCANNED` : tous les manifests de cette famille ont la cible Trivy
