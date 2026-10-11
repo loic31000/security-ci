@@ -131,11 +131,11 @@ jobs:
           version: 'v0.70.0'
           skip-setup-trivy: true
           scan-type: fs
-          scan-ref: \${{ runner.temp }}/java-gradle-probe/positive
+          scan-ref: ${{ runner.temp }}/java-gradle-probe/positive
           scanners: vuln
           severity: HIGH,CRITICAL
           format: json
-          output: \${{ runner.temp }}/java-gradle-probe/positive/trivy.json
+          output: ${{ runner.temp }}/java-gradle-probe/positive/trivy.json
           exit-code: '0'
           timeout: 10m
           cache: false
@@ -146,11 +146,11 @@ jobs:
           version: 'v0.70.0'
           skip-setup-trivy: true
           scan-type: fs
-          scan-ref: \${{ runner.temp }}/java-gradle-probe/negative
+          scan-ref: ${{ runner.temp }}/java-gradle-probe/negative
           scanners: vuln
           severity: HIGH,CRITICAL
           format: json
-          output: \${{ runner.temp }}/java-gradle-probe/negative/trivy.json
+          output: ${{ runner.temp }}/java-gradle-probe/negative/trivy.json
           exit-code: '0'
           timeout: 10m
           cache: false
