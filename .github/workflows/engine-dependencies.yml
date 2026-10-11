@@ -48,19 +48,7 @@ jobs:
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
             --prefix "$MANIFESTS/node" 'jscpd@5.4.1'
           test -s "$MANIFESTS/node/package-lock.json"
-          go mod download -json github.com/zricethezav/gitleaks/v8@v8.30.1 > "$RUNNER_TEMP/gitleaks-module.json"
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          m = json.loads((Path(os.environ["RUNNER_TEMP"]) / "gitleaks-module.json").read_text())
-          src = Path(m["GoMod"])
-          out = Path(os.environ["MANIFESTS"]) / "go" / "go.mod"
-          out.write_bytes(src.read_bytes())
-          pkg_sum = src.parent / "go.sum"
-          if pkg_sum.is_file():
-              (out.parent / "go.sum").write_bytes(pkg_sum.read_bytes())
-          PY
+          bash scripts/build_gitleaks.sh "$MANIFESTS/go" "$RUNNER_TEMP/engine-gitleaks-bin"
           test -s "$MANIFESTS/python/requirements.txt"
           test -s "$MANIFESTS/go/go.mod"
       - name: Scan resolved manifests for known HIGH and CRITICAL vulnerabilities
