@@ -25,17 +25,35 @@ def inspect_payload(payload, approved):
         raise ValueError("approved rule count invalid")
     if not payload or len(payload) > 5_000_000:
         raise ValueError("registry payload missing or unreasonably large")
-    rule_ids = RULE.findall(payload) if payload.startswith(b"rules:\n") else []
+    # The public Registry sometimes serves JSON although the reviewed
+    # bytes are YAML. Inspect JSON *only* for comparison metadata. Never
+    # accept or execute it using the YAML SHA-256 approval.
+    format_name = "unrecognized"
+    rule_ids = []
+    if payload.startswith(b"rules:\n"):
+        format_name = "yaml"
+        rule_ids = RULE.findall(payload)
+    elif payload.lstrip().startswith(b"{"):
+        try:
+            obj = json.loads(payload)
+            if isinstance(obj, dict) and isinstance(obj.get("rules"), list):
+                items = obj["rules"]
+                if all(isinstance(item, dict) and
+                       isinstance(item.get("id"), str) for item in items):
+                    rule_ids = [item["id"].encode("utf-8") for item in items]
+                    format_name = "json"
+        except (ValueError, UnicodeError, TypeError):
+            pass
     actual_sha = hashlib.sha256(payload).hexdigest()
     unique = set(rule_ids)
     # Only a digest of sorted identifiers, never identifiers themselves.
     ids_sha = hashlib.sha256(b"\n".join(sorted(unique))).hexdigest()
-    valid_shape = (payload.startswith(b"rules:\n") and
+    valid_shape = (format_name != "unrecognized" and
                    len(rule_ids) == len(unique) and bool(rule_ids))
     matched = actual_sha == approved["sha256"]
     return {
         "schema": 1,
-        "status": "APPROVED" if matched and valid_shape and len(rule_ids) == expected_count
+        "status": "APPROVED" if matched and format_name == "yaml" and valid_shape and len(rule_ids) == expected_count
                   else "UNAPPROVED",
         "approved_sha256": approved["sha256"],
         "observed_sha256": actual_sha,
@@ -44,7 +62,9 @@ def inspect_payload(payload, approved):
         "distinct_rule_count": len(unique),
         "rule_ids_sha256": ids_sha,
         "matches_approved_sha256": matched,
-        "yaml_shape_recognized": valid_shape,
+        "response_format": format_name,
+        "structure_recognized": valid_shape,
+        "yaml_shape_recognized": format_name == "yaml" and valid_shape,
         "authorization": "NEVER: diagnostics do not approve rules",
     }
 
