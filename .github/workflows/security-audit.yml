@@ -342,9 +342,34 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 6c38b8bf65f7290b7d65387cfd55aa8a27947ff3
+          ref: 5619f5a388cf71ed99c0fe5d36e069829e18be7d
           path: .audit-decision-tools
           persist-credentials: false
+
+      - name: Calibrate active detections versus benign fixtures (sample-level)
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'gitleaks' || matrix.scanner == 'zizmor'
+        run: |
+          set -euo pipefail
+          case "$SCANNER" in
+            semgrep)
+              positive="$RUNNER_TEMP/security-detection-canary/semgrep.sarif"
+              negative="$RUNNER_TEMP/security-benign-control/semgrep.sarif"
+              expected="unsafe.py"
+              ;;
+            gitleaks)
+              positive="$RUNNER_TEMP/security-detection-canary/gitleaks.sarif"
+              negative="$RUNNER_TEMP/security-benign-control/gitleaks.sarif"
+              expected="canary.txt"
+              ;;
+            zizmor)
+              positive="$RUNNER_TEMP/zizmor-detection-canary/result.sarif"
+              negative="$RUNNER_TEMP/zizmor-benign-control/result.sarif"
+              expected="insecure.yml"
+              ;;
+          esac
+          python3 .audit-decision-tools/scripts/scanner_precision.py \
+            --scanner "$SCANNER" --positive "$positive" --negative "$negative" \
+            --positive-file "$expected" --output "$REPORT_DIR/precision-$SCANNER.json"
 
       - name: Résumé et décision
         if: always()
