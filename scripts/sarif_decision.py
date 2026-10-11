@@ -46,11 +46,14 @@ def assess(document):
             raise InvalidSarif("missing scanner identity")
         for invocation in _list(run.get("invocations", []), "invocations"):
             invocation = _obj(invocation, "invocation")
-            if invocation.get("executionSuccessful") is False:
-                raise InvalidSarif("scanner reported execution failure")
-            for note in _list(invocation.get("toolExecutionNotifications", []), "toolExecutionNotifications"):
-                if _obj(note, "toolExecutionNotification").get("level") == "error":
-                    raise InvalidSarif("scanner reported an execution error")
+            # SARIF 2.1.0 requires this boolean for every provided invocation.
+            # No invocations is still valid (e.g. Trivy and Gitleaks output).
+            if invocation.get("executionSuccessful") is not True:
+                raise InvalidSarif("scanner did not confirm successful execution")
+            for name in ("toolExecutionNotifications", "toolConfigurationNotifications"):
+                for note in _list(invocation.get(name, []), name):
+                    if _obj(note, name + " entry").get("level") == "error":
+                        raise InvalidSarif("scanner reported an execution or configuration error")
         results = _list(run.get("results"), "results")
         rules = _list(driver.get("rules", []), "rules")
         levels = {}
