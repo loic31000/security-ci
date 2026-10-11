@@ -62,74 +62,20 @@ licence Semgrep Rules interdisent de redistribuer les règles dans le dépôt.
 La stabilité du registre reste une limite de disponibilité indépendante
 de la précision des scanners.
 
-### Comparaison locale du contenu des règles — contrôle facultatif
+### Qualification de la dérive fournisseur (incident #29)
 
-Le script `scripts/semgrep_ruleset_compare.py` compare **hors dépôt**
-deux réponses dont on dispose réellement : un YAML de référence dont
-**l'empreinte exacte a déjà été approuvée**, et un JSON du registre.
-Il valide d'abord le YAML avec le vérificateur historique (SHA-256 et
-nombre d'IDs), puis compare les objets de règles par identifiant, après
-parsing YAML/JSON et normalisation des clés. Seuls les **nombres**
-de règles communes, ajoutées, manquantes ou dont les attributs diffèrent
-sont écrits dans le rapport. Aucun texte, nom de règle, expression ou
-message n'est publié.
+Les investigations des PR #38 à #41 ont permis de comparer les réponses
+réelles des runners : le YAML approuvé et le JSON refusé présentaient les
+mêmes 225 objets de règles *après normalisation*. Cela n'établit ni
+l'égalité des octets, ni la compatibilité des paramètres hors règles.
 
-```bash
-python3 scripts/semgrep_ruleset_compare.py \
-  --approved-yaml /chemin/prive/regles-approuvees.yaml \
-  --observed-json /chemin/prive/reponse-registre.json \
-  --lock locks/semgrep-security-audit.json \
-  --output /chemin/prive/comparaison.json
-```
-
-La CI réalise désormais aussi une **observation facultative** lorsque
-le YAML approuvé a déjà passé le contrôle d'intégrité : une seconde
-réponse du registre est récupérée dans le dossier temporaire, puis
-comparée par le même script épinglé. Seuls
-`semgrep-rule-comparison.json` (compteurs agrégés) et
-`semgrep-registry-observation.json` (format, taille et empreintes
-non sensibles) sont inclus dans les artifacts ; le contenu brut est
-supprimé et n'est jamais une configuration de scanner. Si la seconde réponse est
-indisponible, n'est pas un JSON de règles, ou n'est pas comparable,
-le rapport porte `INCOMPARABLE` : **ne conclure ni équivalence ni dérive
-du contenu**. Cette observation n'a aucun effet sur le verdict sécurité,
-qui reste déterminé par le YAML et l'empreinte approuvés.
-
-**Important :** ce comparateur ne télécharge ni n'archive les règles, ne
-modifie pas les règles autorisées et n'est **jamais utilisé pour décider
-d'exécuter un scan**. L'égalité d'objets de règles ne prouve pas
-l'équivalence de toute la configuration ou du moteur Semgrep. Si le YAML
-réel approuvé n'est pas disponible, la comparaison reste
-`INCOMPARABLE`, et l'incident #29 n'est pas résolu.
-
-### Empreinte canonique comparée entre runners — preuve P0
-
-Lorsque le job Semgrep obtient le YAML **exactement approuvé**, le
-moteur produit maintenant `semgrep-rule-fingerprint.json` en mode
-`APPROVED_YAML`. Si le fournisseur ne fournit qu'un JSON non approuvé
-et que le scan échoue, le même programme calcule une empreinte en mode
-`UNAPPROVED_OBSERVATION`, **sans exécuter le JSON**.
-
-Le programme `scripts/semgrep_ruleset_fingerprint.py` parse les objets
-de règles et calcule une empreinte SHA-256 unique à partir des identifiants
-et du contenu de tous les objets, avec tri et normalisation déterministes.
-L'artefact ne contient **ni identifiants de règles, ni empreintes
-individuelles, ni motifs, ni messages** : seulement le digest global,
-la famille du format, le nombre d'objets et le statut de provenance.
-Le script utilisé est SHA-pinné et comparé au fichier testé.
-
-Une identité de ces digests sur deux runs différents établit une
-**égalité des objets de règles parsés selon cette normalisation**, sous
-les hypothèses cryptographiques de SHA-256. Elle ne prouve pas que les
-réponses sont identiques octet par octet, ni l'équivalence des paramètres
-hors `rules`, ni le comportement réel du scanner. Une différence de
-digest exige une revue privée des règles : pas d'identifiants ou de
-règles brutes dans GitHub Actions ou les issues.
-
-**Le résultat n'est jamais utilisé dans le contrôle d'intégrité**.
-La seule autorisation d'exécution reste le SHA exact du YAML approuvé,
-son format et ses 225 identifiants uniques. L'échec du registre demeure
-bloquant. Aucun digest canonique ne peut autoriser un nouveau profil.
+Pour garder le moteur simple, les téléchargements et empreintes de
+recherche supplémentaires ont été retirés du workflow courant.
+**En fonctionnement normal, seul le profil YAML approuvé est exécuté.**
+Si le fournisseur ne le fournit pas, le job reste en échec explicite
+(fail-closed), avec un unique diagnostic sans contenu des règles.
+L'incident de disponibilité #29 reste ouvert ; aucune approbation
+automatique du JSON, aucune redistribution des règles.
 
 ## Étape suivante — étendre les stacks sans créer de faux « zéro alerte » (P1)
 

@@ -125,66 +125,10 @@ jobs:
             python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
               "$bundle" .audit-python-lock/locks/semgrep-security-audit.json \
               "$REPORT_DIR/semgrep-registry-drift.json"
-            # Produce an anonymous rule-object digest even if this runner only
-            # received JSON. The failed SHA gate still exits unconditionally.
-            PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
-              python3 .audit-drift-tools/scripts/semgrep_ruleset_fingerprint.py \
-                --source "$bundle" \
-                --lock .audit-python-lock/locks/semgrep-security-audit.json \
-                --mode observed \
-                --output "$REPORT_DIR/semgrep-rule-fingerprint.json"
             echo "::error::The reviewed Semgrep ruleset is unavailable. Fail closed; review the registry drift separately."
             exit 1
           fi
           echo "SEMGREP_CONFIG_PATH=$RUNNER_TEMP/semgrep-approved/rules.yaml" >> "$GITHUB_ENV"
-
-      - name: Fingerprint exact approved Semgrep rule objects without exporting rules
-        if: matrix.scanner == 'semgrep'
-        run: |
-          # The preceding integrity gate already authenticated this YAML.
-          # Diagnostics are anonymous, cannot authorize rules and are non-blocking.
-          PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
-            python3 .audit-drift-tools/scripts/semgrep_ruleset_fingerprint.py \
-              --source "$RUNNER_TEMP/semgrep-approved/rules.yaml" \
-              --lock .audit-python-lock/locks/semgrep-security-audit.json \
-              --mode approved \
-              --output "$REPORT_DIR/semgrep-rule-fingerprint.json"
-
-      - name: Compare actual Semgrep YAML and JSON responses without granting trust
-        if: matrix.scanner == 'semgrep'
-        run: |
-          set -euo pipefail
-          # Reached only after the original SHA-256/225-rule gate succeeded.
-          # This second registry observation is OPTIONAL and never becomes
-          # the scanner config. Raw responses stay in RUNNER_TEMP, not artifacts.
-          response="$RUNNER_TEMP/semgrep-comparison-response.json"
-          summary="$REPORT_DIR/semgrep-rule-comparison.json"
-          if curl --fail --silent --show-error --location \
-              --connect-timeout 10 --max-time 35 -H 'Accept: application/json' \
-              https://semgrep.dev/c/p/security-audit --output "$response"; then
-            # Record only format, size, counts and anonymous hashes for triage.
-            python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
-              "$response" .audit-python-lock/locks/semgrep-security-audit.json \
-              "$REPORT_DIR/semgrep-registry-observation.json"
-            PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
-              python3 .audit-drift-tools/scripts/semgrep_ruleset_compare.py \
-                --approved-yaml "$RUNNER_TEMP/semgrep-approved/rules.yaml" \
-                --observed-json "$response" \
-                --lock .audit-python-lock/locks/semgrep-security-audit.json \
-                --output "$summary"
-          else
-            python3 - "$summary" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-          Path(sys.argv[1]).write_text(json.dumps({
-              "schema": 1, "status": "INCOMPARABLE",
-              "reason": "second registry request unavailable",
-              "authorization": "NEVER: diagnostics do not approve scanner rules",
-          }, sort_keys=True) + "\n")
-          PY
-          fi
-          rm -f "$response"
 
       - name: Installer zizmor avec hachages vérifiés
         if: matrix.scanner == 'zizmor'
@@ -913,7 +857,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 226bb005f4be2c93d43d7419814c3ed6764efbdf
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
           path: .audit-python-lock
           persist-credentials: false
 
