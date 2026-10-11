@@ -92,13 +92,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/semgrep-approved"
-          curl --fail --silent --show-error --location --retry 3 \
-            --connect-timeout 20 --max-time 90 -H 'Accept: application/json' \
-            https://semgrep.dev/c/p/security-audit \
-            --output "$RUNNER_TEMP/semgrep-approved/rules.yaml"
-          python3 .audit-python-lock/scripts/verify_semgrep_bundle.py \
-            "$RUNNER_TEMP/semgrep-approved/rules.yaml" \
-            .audit-python-lock/locks/semgrep-security-audit.json
+          # Only a byte-for-byte match with the already-reviewed 225-rule
+          # bundle is usable. Some registry replicas may briefly serve
+          # different revisions; retrying never authorizes a new digest.
+          bundle="$RUNNER_TEMP/semgrep-approved/rules.yaml"
+          verified=false
+          for attempt in 1 2 3; do
+            if curl --fail --silent --show-error --location --retry 2 \
+                --connect-timeout 20 --max-time 90 -H 'Accept: application/json' \
+                https://semgrep.dev/c/p/security-audit \
+                --output "$bundle" &&
+                python3 .audit-python-lock/scripts/verify_semgrep_bundle.py \
+                  "$bundle" .audit-python-lock/locks/semgrep-security-audit.json; then
+              verified=true
+              break
+            fi
+            echo "::warning::Semgrep registry attempt $attempt returned no approved bundle; unverified rules were NOT executed"
+            if (( attempt < 3 )); then sleep "$attempt"; fi
+          done
+          if [[ "$verified" != "true" ]]; then
+            echo "::error::The reviewed Semgrep ruleset is unavailable. Fail closed; review the registry drift separately."
+            exit 1
+          fi
           echo "SEMGREP_CONFIG_PATH=$RUNNER_TEMP/semgrep-approved/rules.yaml" >> "$GITHUB_ENV"
 
       - name: Installer zizmor avec hachages vérifiés
