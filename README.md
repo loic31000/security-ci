@@ -149,12 +149,16 @@ vérifie la complétude des preuves, mais ne crée aucun tag ni aucune release.
 ## Calibration de la précision sur fixtures étiquetées
 
 Semgrep, Gitleaks et zizmor vérifient désormais, en plus de leurs contrôles
-historiques, une paire positive/négative avec le **vrai rapport SARIF**. Le
+historiques, une paire positive/négative avec le **vrai rapport SARIF**. Deux paires de fixtures distinctes
+par scanner sont désormais évaluées, avec un bilan de quatre résultats attendus
+(TP=2, TN=2, FP=0, FN=0 sur ces seuls exemples). Le
 validateur `scripts/scanner_precision.py` exige une alerte active sur le
 **bon fichier**, aucune alerte sur la fixture bénigne, et refuse les erreurs
 d'analyse, les suppressions acceptées comme preuve positive, ainsi que les
 rapports incomplets. Chaque job conserve un fichier `precision-<scanner>.json`
-dans ses artifacts, sans code source, messages ni valeurs de secrets.
+dans ses artifacts, sans code source, messages ni valeurs de secrets. Il
+archive aussi un résumé agrégé `precision-<scanner>-summary.json`. L'identité
+du vrai scanner SARIF et les statuts de suppression sont vérifiés.
 
 Les compteurs TP/TN/FP/FN sont mesurés **par fixture synthétique** ; ils ne
 décrivent pas la précision globale du moteur sur un projet réel. Une

@@ -11,11 +11,12 @@ precision = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(precision)
 
 
-def sarif(*results, successful=True, notifications=None):
+def sarif(*results, successful=True, notifications=None, scanner="Semgrep"):
+    """Synthetic report with explicit scanner identity."""
     return {
         "version": "2.1.0",
         "runs": [{
-            "tool": {"driver": {"name": "Semgrep", "rules": []}},
+            "tool": {"driver": {"name": scanner, "rules": []}},
             "invocations": [{
                 "executionSuccessful": successful,
                 "toolConfigurationNotifications": notifications or [],
@@ -51,8 +52,8 @@ class ScannerCalibrationTest(unittest.TestCase):
         self.assertEqual(result["unexpected_positive_locations"], 1)
 
     def test_benign_result_is_false_positive_even_if_suppressed(self):
-        result = precision.calibrate("gitleaks", sarif(finding("canary.txt")),
-                                     sarif(finding("placeholder.txt", suppressions=[{"status": "accepted"}])),
+        result = precision.calibrate("gitleaks", sarif(finding("canary.txt"), scanner="gitleaks"),
+                                     sarif(finding("placeholder.txt", suppressions=[{"status": "accepted"}]), scanner="gitleaks"),
                                      "canary.txt")
         self.assertEqual(result["status"], "FAIL")
         self.assertEqual(result["false_positive_fixtures"], 1)
@@ -89,10 +90,35 @@ class ScannerCalibrationTest(unittest.TestCase):
         sensitive_value = "ONLY_FOR_UNIT_TESTS_NEVER_REAL_SECRET"
         result = precision.calibrate(
             "gitleaks",
-            sarif(finding("canary.txt", message={"text": sensitive_value})), sarif(),
+            sarif(finding("canary.txt", message={"text": sensitive_value}), scanner="gitleaks"),
+            sarif(scanner="gitleaks"),
             "canary.txt",
         )
         self.assertNotIn(sensitive_value, json.dumps(result))
+
+    def test_wrong_scanner_identity_rejected_for_both_fixtures(self):
+        good = sarif(finding())
+        wrong = sarif(finding(), scanner="gitleaks")
+        for p, n in ((wrong, sarif()), (good, sarif(scanner="zizmor"))):
+            with self.subTest(name=(p["runs"][0]["tool"]["driver"]["name"],
+                                    n["runs"][0]["tool"]["driver"]["name"])):
+                with self.assertRaisesRegex(precision.InvalidEvidence,
+                                            "unexpected scanner identity"):
+                    precision.calibrate("semgrep", p, n, "unsafe.py")
+
+    def test_missing_and_invalid_suppression_status_rejected(self):
+        for status in ("masked", False, [], {}):
+            item = finding(suppressions=[{"status": status}])
+            with self.subTest(status=status):
+                with self.assertRaisesRegex(precision.InvalidEvidence,
+                                            "malformed suppressions"):
+                    precision.calibrate("semgrep", sarif(item), sarif(), "unsafe.py")
+
+    def test_file_uri_host_is_not_accepted(self):
+        with self.assertRaisesRegex(precision.InvalidEvidence, "unsafe SARIF"):
+            precision.calibrate("semgrep",
+                                sarif(finding("file://remote-host/tmp/unsafe.py")),
+                                sarif(), "unsafe.py")
 
     def test_missing_and_corrupt_sarif_fail_before_reporting_clean(self):
         with tempfile.TemporaryDirectory() as temp:
