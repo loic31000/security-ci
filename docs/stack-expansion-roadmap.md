@@ -80,6 +80,34 @@ activation d'une famille devra établir :
 - Comparaison d'un essai sur branche isolée avec une baseline connue, sans
   fusionner des changements dans le dépôt d'essai.
 
+## Preuves généralisées de couverture des dépendances — phase P0/P1
+
+Le job Trivy du workflow réutilisable produit désormais un artifact
+`stack-coverage.json` fondé sur les **noms des manifests du dépôt appelant**
+et les **cibles réellement reconnues** dans `trivy-targets.json`.
+Pour chaque famille reconnue (Go modules, Python requirements, npm, pnpm,
+Maven `pom.xml`, Gradle lock, Cargo.lock, Gemfile.lock, composer.lock),
+le script distingue :
+
+- `SCANNED` : tous les manifests de cette famille ont la cible Trivy
+  exacte et l'analyseur de dépendances attendu ;
+- `INCOMPLETE` : au moins un manifest existe sans cible/analyseur
+  correspondant, et le contrôle échoue pour ne pas produire un faux vert ;
+- `NOT_APPLICABLE` : aucun manifest pertinent trouvé ;
+- `MANIFEST_ONLY` : exemple `build.gradle`, `Cargo.toml` ou
+  `package.json` sans verrou reconnu, ne valant **pas couverture** ;
+- `UNVERIFIED` : .NET `*.csproj` ou `packages.lock.json` présents,
+  mais aucun analyseur NuGet validé à cette étape.
+
+Les cibles générées, dépendances dans les fichiers ignorés (vendor,
+node_modules, .audit-*), symlinks et chemins inappropriés ne peuvent pas
+démontrer une couverture. Seuls les **comptages par famille** sont archivés,
+sans chemins de fichiers ni texte de détection. Un `SCANNED` ne signifie
+ni « pas de vulnérabilité » ni « toutes les dépendances transitives vues ».
+Le code effectif est épinglé par SHA et comparé au script testé sur PR.
+Les familles non encore vérifiées restent explicitement hors couverture,
+notamment les projets .NET sans preuve NuGet.
+
 ## Règles de livraison
 
 Les améliorations du moteur passent par PR et ses contrôles GitHub Actions,
