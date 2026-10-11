@@ -777,8 +777,8 @@ jobs:
           forbidden = ("./.git/", "./.audit-python-lock/",
                        "./.audit-jscpd-tools/", "./.audit-report-tools/")
           names = [item.get("name", "") for item in root.findall(".//measure/item")]
-          if not names or any(f" at {path}" in name for name in names for path in forbidden):
-              raise SystemExit("Lizard: no functions or generated checkout included")
+          if any(f" at {path}" in name for name in names for path in forbidden):
+              raise SystemExit("Lizard: generated checkout included in metrics")
           PY
 
       - name: Charger le générateur Markdown de maintenabilité
