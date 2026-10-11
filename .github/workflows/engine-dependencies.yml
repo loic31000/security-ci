@@ -15,7 +15,7 @@ jobs:
   engine-dependencies:
     name: Resolved dependencies - Python, Node and Go
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout central engine
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -110,6 +110,58 @@ jobs:
           print(f"Trivy positive control: {count} advisory candidate(s) detected")
           PY
 
+      - name: Prepare isolated Java Gradle lockfile positive and benign controls
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/java-gradle-probe/positive" "$RUNNER_TEMP/java-gradle-probe/negative"
+          cat > "$RUNNER_TEMP/java-gradle-probe/positive/gradle.lockfile" <<'LOCK'
+          # Synthetic Gradle dependency-locking example, not shipped to a project.
+          org.apache.logging.log4j:log4j-core:2.14.1=runtimeClasspath
+          empty=
+          LOCK
+          cat > "$RUNNER_TEMP/java-gradle-probe/negative/gradle.lockfile" <<'LOCK'
+          # Independent benign dependency-locking example.
+          org.slf4j:slf4j-api:2.0.17=runtimeClasspath
+          empty=
+          LOCK
+
+      - name: Scan deliberately vulnerable Java Gradle locked dependency
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: ${{ runner.temp }}/java-gradle-probe/positive
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/java-gradle-probe/positive/trivy.json
+          exit-code: '0'
+          timeout: 10m
+          cache: false
+
+      - name: Scan benign Java Gradle locked dependency
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: ${{ runner.temp }}/java-gradle-probe/negative
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/java-gradle-probe/negative/trivy.json
+          exit-code: '0'
+          timeout: 10m
+          cache: false
+
+      - name: Verify experimental Gradle targets and advisory controls
+        run: |
+          python3 scripts/java_gradle_probe.py \
+            --positive "$RUNNER_TEMP/java-gradle-probe/positive/trivy.json" \
+            --negative "$RUNNER_TEMP/java-gradle-probe/negative/trivy.json" \
+            --output "$RUNNER_TEMP/java-gradle-probe/gradle-coverage-evidence.json"
+
       - name: Generate CycloneDX SBOM for resolved toolchain
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -149,5 +201,8 @@ jobs:
             ${{ runner.temp }}/security-engine-manifests/trivy-engine.json
             ${{ runner.temp }}/security-engine-manifests/engine.cdx.json
             ${{ runner.temp }}/security-engine-manifests/engine-provenance.json
+            ${{ runner.temp }}/java-gradle-probe/positive/trivy.json
+            ${{ runner.temp }}/java-gradle-probe/negative/trivy.json
+            ${{ runner.temp }}/java-gradle-probe/gradle-coverage-evidence.json
           retention-days: 7
           if-no-files-found: warn
