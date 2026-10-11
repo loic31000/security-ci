@@ -58,6 +58,41 @@ class StackCoverageTest(unittest.TestCase):
                 result = self.run_on(["go.mod"], [target])
                 self.assertEqual(result["status"], "INCOMPLETE")
 
+    def test_named_gradle_lockfile_variant_is_a_real_target(self):
+        result = self.run_on(
+            ["java/compileClasspath-gradle.lockfile"],
+            [row("java/compileClasspath-gradle.lockfile", "gradle")])
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["families"]["java-gradle"]["state"], "SCANNED")
+        self.assertEqual(result["families"]["java-gradle"]["recognized_manifests"], 1)
+
+    def test_each_gradle_variant_must_be_recognized(self):
+        result = self.run_on(
+            ["java/gradle.lockfile", "java/compileClasspath-gradle.lockfile"],
+            [row("java/gradle.lockfile", "gradle")])
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(result["families"]["java-gradle"]["declared_manifests"], 2)
+        self.assertEqual(result["families"]["java-gradle"]["recognized_manifests"], 1)
+
+    def test_wrong_gradle_analyzer_or_missing_class_not_accepted(self):
+        for entry in (
+            row("java/some-gradle.lockfile", "npm"),
+            row("java/some-gradle.lockfile", "gradle", None),
+            row("java/some-gradle.lockfile", "gradle", "config"),
+        ):
+            with self.subTest(entry=entry):
+                result = self.run_on(["java/some-gradle.lockfile"], [entry])
+                self.assertEqual(result["status"], "INCOMPLETE")
+
+    def test_backup_filename_is_not_considered_gradle_lock(self):
+        result = self.run_on(["gradle.lockfile.bak"], [])
+        self.assertEqual(result["families"]["java-gradle"]["state"], "NOT_APPLICABLE")
+
+    def test_windows_absolute_target_cannot_claim_coverage(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(coverage.CoverageError):
+                coverage.summarize(d, trivy(row("C:/runner/go.mod")))
+
     def test_unresolved_gradle_and_rust_are_manifest_only(self):
         result = self.run_on(["app/build.gradle", "lib/Cargo.toml", "web/package.json"], [])
         self.assertEqual(result["status"], "PASS")
