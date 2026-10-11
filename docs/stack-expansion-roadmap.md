@@ -85,10 +85,11 @@ python3 scripts/semgrep_ruleset_compare.py \
 La CI réalise désormais aussi une **observation facultative** lorsque
 le YAML approuvé a déjà passé le contrôle d'intégrité : une seconde
 réponse du registre est récupérée dans le dossier temporaire, puis
-comparée par le même script épinglé. Seul
-`semgrep-rule-comparison.json` (compteurs agrégés sans identifiants)
-est inclus dans les artifacts ; le contenu brut est supprimé et n'est
-jamais une configuration de scanner. Si la seconde réponse est
+comparée par le même script épinglé. Seuls
+`semgrep-rule-comparison.json` (compteurs agrégés) et
+`semgrep-registry-observation.json` (format, taille et empreintes
+non sensibles) sont inclus dans les artifacts ; le contenu brut est
+supprimé et n'est jamais une configuration de scanner. Si la seconde réponse est
 indisponible, n'est pas un JSON de règles, ou n'est pas comparable,
 le rapport porte `INCOMPARABLE` : **ne conclure ni équivalence ni dérive
 du contenu**. Cette observation n'a aucun effet sur le verdict sécurité,
