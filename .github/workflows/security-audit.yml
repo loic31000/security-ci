@@ -245,7 +245,7 @@ jobs:
       - name: Measure duplication
         run: |
           mkdir -p "$RUNNER_TEMP/maintainability"
-          npx --yes jscpd@4.0.5 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
+          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
 
       - name: Measure Python complexity and maintainability
         run: |
