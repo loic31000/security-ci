@@ -11,6 +11,32 @@ def safe(value):
     return html.escape(" ".join(str(value or "").split())[:250], quote=False).replace("|", "\\|")
 
 
+def lizard_complexity(xml_path):
+    """Count real Lizard XML function CCN values by the CCN label, not by tag guesses."""
+    import math
+
+    tree = ET.parse(xml_path)
+    groups = tree.findall(".//measure[@type='Function']")
+    if not groups:
+        raise ValueError("Lizard: Function measure missing")
+    high = total = 0
+    for measure in groups:
+        labels = [label.text for label in measure.findall("./labels/label")]
+        if "CCN" not in labels:
+            raise ValueError("Lizard: CCN label missing")
+        index = labels.index("CCN")
+        for item in measure.findall("./item"):
+            values = item.findall("./value")
+            if index >= len(values) or values[index].text is None:
+                raise ValueError("Lizard: CCN field missing")
+            ccn = float(values[index].text)
+            if not math.isfinite(ccn) or ccn < 0:
+                raise ValueError("Lizard: invalid CCN value")
+            total += 1
+            high += ccn >= 15
+    return high, total
+
+
 def render(root):
     root = Path(root)
     lines = ["# Rapport de maintenabilité", "",
@@ -46,10 +72,8 @@ def render(root):
             lines.append(f"- `{safe(path)}` : indice {score}")
     xml = root / "lizard.xml"
     if xml.exists():
-        tree = ET.parse(xml)
-        values = tree.findall(".//measure[@type='Function']/value")
-        high = sum(1 for v in values if v.get("value", "0").isdigit() and int(v.get("value", "0")) >= 15)
-        lines += ["", f"## Complexité multi-langage Lizard : {high} valeur(s) >= 15", "",
+        high, total = lizard_complexity(xml)
+        lines += ["", f"## Complexité multi-langage Lizard : {high} fonction(s) >= 15 sur {total} mesurées", "",
                   "Le détail des fonctions et fichiers se trouve dans lizard.xml."]
     lines += ["", "Rapports sources : fichiers JSON/XML dans le même artifact.", ""]
     return "\n".join(lines)
