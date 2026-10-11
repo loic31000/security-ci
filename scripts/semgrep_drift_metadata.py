@@ -51,10 +51,24 @@ def inspect_payload(payload, approved):
     valid_shape = (format_name != "unrecognized" and
                    len(rule_ids) == len(unique) and bool(rule_ids))
     matched = actual_sha == approved["sha256"]
+    approved_bundle = (matched and format_name == "yaml" and valid_shape
+                       and len(rule_ids) == expected_count)
+    # Classify the *shape of evidence*, not whether new rules are equivalent.
+    # The accepted payload is still solely the exact reviewed YAML bytes.
+    if approved_bundle:
+        category = "APPROVED"
+    elif format_name == "unrecognized":
+        category = "UNRECOGNIZED_RESPONSE"
+    elif not valid_shape or len(rule_ids) != expected_count:
+        category = "RULE_INVENTORY_MISMATCH"
+    elif format_name == "json":
+        category = "JSON_FORMAT_UNAPPROVED"
+    else:
+        category = "YAML_DIGEST_MISMATCH"
     return {
         "schema": 1,
-        "status": "APPROVED" if matched and format_name == "yaml" and valid_shape and len(rule_ids) == expected_count
-                  else "UNAPPROVED",
+        "status": "APPROVED" if approved_bundle else "UNAPPROVED",
+        "diagnostic_category": category,
         "approved_sha256": approved["sha256"],
         "observed_sha256": actual_sha,
         "payload_bytes": len(payload),

@@ -48,6 +48,14 @@ les réponses malformées et les problèmes d'infrastructure. Elle **ne
 constitue jamais une nouvelle approbation** du registre. Le profil original
 n'est pas conservé dans les artifacts.
 
+Le champ `diagnostic_category` classe maintenant l'évidence sans déduire
+une équivalence des règles : `JSON_FORMAT_UNAPPROVED` (format JSON et nombre
+d'IDs attendu, **sans preuve de contenu identique**),
+`YAML_DIGEST_MISMATCH`, `RULE_INVENTORY_MISMATCH` ou
+`UNRECOGNIZED_RESPONSE`. `APPROVED` reste réservé à la configuration
+YAML strictement identique aux octets approuvés. Ces catégories
+n'influencent **jamais** la décision d'autoriser un scan.
+
 L'[incident #29](https://github.com/loic31000/security-ci/issues/29) doit
 être qualifié avant changement du SHA de référence. Les conditions de la
 licence Semgrep Rules interdisent de redistribuer les règles dans le dépôt.
