@@ -312,6 +312,34 @@ jobs:
           mkdir -p "$RUNNER_TEMP/maintainability"
           npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
 
+      - name: Verify exact duplicate detection with a synthetic clone
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/jscpd-positive-control"
+          mkdir -p "$fixture/source" "$fixture/reports"
+          python3 - "$fixture/source" <<'PY'
+          import sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          lines = ["def identical_function(value):"]
+          lines += [f"    number_{i} = value * {i} + (value % {i + 3})" for i in range(1, 32)]
+          lines.append("    return number_31")
+          body = "\n".join(lines) + "\n"
+          for name in ("sample_a.py", "sample_b.py"):
+              (root / name).write_text(body)
+          PY
+          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 \
+            --reporters json --output "$fixture/reports" --threshold 100 "$fixture/source"
+          python3 - "$fixture/reports/jscpd-report.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          duplicates = json.loads(Path(sys.argv[1]).read_text()).get("duplicates", [])
+          if not duplicates:
+              raise SystemExit("jscpd failed to report an identical 32-line function")
+          print(f"jscpd positive control: {len(duplicates)} exact clone(s) detected")
+          PY
+
       - name: Measure Python complexity and maintainability
         run: |
           python -m pip install 'radon==6.0.1'
