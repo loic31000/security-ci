@@ -10,6 +10,11 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 SCANNERS = frozenset(("semgrep", "gitleaks", "zizmor"))
+TOOL_IDENTITIES = {
+    "semgrep": frozenset(("semgrep", "semgrep oss")),
+    "gitleaks": frozenset(("gitleaks",)),
+    "zizmor": frozenset(("zizmor",)),
+}
 
 
 class InvalidEvidence(ValueError):
@@ -28,13 +33,13 @@ def _reported_paths(result):
         # Different scanners emit relative or absolute local paths. We compare
         # basenames only; do not leak target paths or accept cross-file findings.
         raw_path = unquote(parsed.path).replace("\\", "/")
-        if parsed.scheme not in ("", "file") or ".." in raw_path.split("/"):
+        if parsed.scheme not in ("", "file") or parsed.netloc or ".." in raw_path.split("/"):
             raise InvalidEvidence("unsafe SARIF location")
         paths.append(raw_path.rsplit("/", 1)[-1])
     return paths
 
 
-def _active_results(report):
+def _active_results(report, scanner):
     if not isinstance(report, dict) or report.get("version") != "2.1.0":
         raise InvalidEvidence("invalid SARIF version")
     runs = report.get("runs")
@@ -46,8 +51,10 @@ def _active_results(report):
         if not isinstance(run, dict):
             raise InvalidEvidence("malformed SARIF run")
         driver = (run.get("tool") or {}).get("driver")
-        if not isinstance(driver, dict) or not driver.get("name"):
+        if not isinstance(driver, dict) or not isinstance(driver.get("name"), str):
             raise InvalidEvidence("missing scanner identity")
+        if driver["name"].strip().casefold() not in TOOL_IDENTITIES[scanner]:
+            raise InvalidEvidence("unexpected scanner identity")
         rules = {item.get("id"): item for item in driver.get("rules", [])
                  if isinstance(item, dict)}
         for invocation in run.get("invocations", []):
@@ -76,7 +83,9 @@ def _active_results(report):
                 raise InvalidEvidence("unknown SARIF level")
             suppressions = result.get("suppressions") or []
             if not isinstance(suppressions, list) or any(
-                    not isinstance(item, dict) for item in suppressions):
+                    not isinstance(item, dict) or
+                    item.get("status") not in (None, "accepted", "underReview", "rejected")
+                    for item in suppressions):
                 raise InvalidEvidence("malformed suppressions")
             active = (kind == "fail" and level in ("warning", "error")
                       and not any(s.get("status") == "accepted" for s in suppressions))
@@ -99,8 +108,8 @@ def calibrate(scanner, positive, negative, positive_file):
             or "/" in positive_file or "\\" in positive_file
             or positive_file in (".", "..")):
         raise InvalidEvidence("invalid expected positive filename")
-    positive_candidates, positive_total = _active_results(positive)
-    negative_candidates, negative_total = _active_results(negative)
+    positive_candidates, positive_total = _active_results(positive, scanner)
+    negative_candidates, negative_total = _active_results(negative, scanner)
     matching = sum(positive_file in locations for locations in positive_candidates)
     unexpected = sum(positive_file not in locations for locations in positive_candidates)
     evidence = {
@@ -109,6 +118,8 @@ def calibrate(scanner, positive, negative, positive_file):
         "labeled_positive_fixtures": 1,
         "labeled_negative_fixtures": 1,
         "positive_active_results": len(positive_candidates),
+        "positive_raw_results": positive_total,
+        "scanner_identity_checked": True,
         "negative_raw_results": negative_total,
         "true_positive_fixtures": int(matching > 0),
         "false_negative_fixtures": int(matching == 0),
