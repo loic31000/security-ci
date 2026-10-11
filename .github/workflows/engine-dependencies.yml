@@ -46,7 +46,7 @@ jobs:
             'lizard==1.17.10' 'defusedxml==0.7.1' 'pytest==8.4.2'
           "$RUNNER_TEMP/engine-py/bin/python" -m pip freeze > "$MANIFESTS/python/requirements.txt"
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
-            --prefix "$MANIFESTS/node" 'jscpd@4.0.5'
+            --prefix "$MANIFESTS/node" 'jscpd@5.4.1'
           test -s "$MANIFESTS/node/package-lock.json"
           go mod download -json github.com/zricethezav/gitleaks/v8@v8.30.1 > "$RUNNER_TEMP/gitleaks-module.json"
           python - <<'PY'
