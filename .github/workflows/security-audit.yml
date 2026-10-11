@@ -197,7 +197,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 4471a221d8cf00133a4976c2ffed09f310a7bd2d
+          ref: d1ba6e13c3a10250ec6091d6c1dc6d2107bc4f7b
           path: .audit-stack-tools
           persist-credentials: false
 
