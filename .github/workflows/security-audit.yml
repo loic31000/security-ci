@@ -198,6 +198,35 @@ jobs:
           print(f"Detection canary succeeded: {findings} finding(s), no real secret used")
           PY
 
+      - name: Vérifier une détection zizmor synthétique
+        if: matrix.scanner == 'zizmor'
+        run: |
+          set -euo pipefail
+          fixture_dir="$RUNNER_TEMP/zizmor-detection-canary"
+          mkdir -p "$fixture_dir/.github/workflows"
+          cat > "$fixture_dir/.github/workflows/insecure.yml" <<'YAML'
+          name: Deliberately insecure canary
+          on: pull_request_target
+          permissions: write-all
+          jobs:
+            canary:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - run: echo "\${{ github.event.pull_request.title }}"
+          YAML
+          zizmor --offline --min-severity medium --format sarif \
+            "$fixture_dir" > "$fixture_dir/result.sarif"
+          python3 - "$fixture_dir/result.sarif" <<'PY'
+          import json
+          import sys
+          doc = json.load(open(sys.argv[1]))
+          count = sum(len(r.get("results", [])) for r in doc.get("runs", []))
+          if count < 1:
+              raise SystemExit("zizmor missed deliberate insecure workflow")
+          print(f"zizmor canary: {count} expected warning(s) detected")
+          PY
+
       - name: Charger le validateur SARIF du moteur central
         if: always()
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
