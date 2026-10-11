@@ -108,6 +108,26 @@ Le code effectif est épinglé par SHA et comparé au script testé sur PR.
 Les familles non encore vérifiées restent explicitement hors couverture,
 notamment les projets .NET sans preuve NuGet.
 
+### Lot A.1 — contrôle réel Java/Gradle sur deux verrous (Trivy v0.70.0)
+
+Le job `engine-dependencies` audite deux `gradle.lockfile` **synthétiques**
+dans `RUNNER_TEMP`, indépendamment des dépôts appelants. La paire comprend
+`log4j-core:2.14.1` volontairement vulnérable et
+`slf4j-api:2.0.17` bénin. Le validateur `java_gradle_probe.py` exige que
+les deux cibles soient reconnues exactement comme Gradle, qu'une alerte
+HIGH/CRITICAL concerne **le paquet et la version attendus**, et que la
+fixture bénigne n'ait aucun avis. Les rapports Trivy et le JSON de
+calibration sont archivés dans `engine-dependencies-*`.
+
+Cet essai a été exécuté sur runner GitHub dans la première PR d'exploration
+[#32](https://github.com/loic31000/security-ci/pull/32) : **2 cibles Gradle**,
+3 avis candidats sur Log4j, 0 sur le cas bénin. Le code a été reporté sur une
+nouvelle PR issue de `main` à jour pour résoudre les conflits de documentation.
+**Ce n'est pas une preuve de couverture Maven, Java/Kotlin source ou de
+dépendances transitives complètes.** Trivy peut résoudre des dépendances
+Maven via réseau ; une erreur HTTP 429 ou un graphe tronqué devra être
+signalé distinctement dans le futur lot A.2.
+
 ## Règles de livraison
 
 Les améliorations du moteur passent par PR et ses contrôles GitHub Actions,
