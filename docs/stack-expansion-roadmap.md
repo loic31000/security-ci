@@ -22,8 +22,13 @@ Ces contrôles **ne prétendent pas** mesurer les faux négatifs à l'échelle d
 programme, l'exploitabilité ni une couverture parfaite. Les mises à jour des
 règles Semgrep et bases CVE peuvent modifier les résultats légitimement.
 
-La prochaine étape consiste à ajouter des fixtures indépendantes en nombre
-suffisant pour mesurer séparément : les chemins positifs, les faux signalements
+La seconde campagne de calibration exécute désormais **deux paires
+positives/négatives par scanner**, avec bilan agrégé et identité SARIF vérifiée.
+Les deux exemples positifs peuvent partager une même classe de règle : cela
+prouve la robustesse de l'intégration, pas deux familles de vulnérabilités.
+
+La prochaine étape consiste à diversifier les catégories de règles et les
+fixtures indépendantes en nombre suffisant pour mesurer séparément : les chemins positifs, les faux signalements
 sur code bénin, les erreurs de configuration, les exclusions et les changements
 de versions, avec revue humaine de tout échec inattendu.
 
@@ -33,7 +38,7 @@ Ordre proposé, **à réévaluer avec les usages réels** :
 
 | Lot | Écosystèmes / manifests | Preuves minimales requises |
 | --- | --- | --- |
-| A | Java / Kotlin : Maven `pom.xml`, Gradle `*.gradle`, verrous si présents | Inventaire reconnu par le scanner, fixture vulnérable et saine, traçage version/règle |
+| A | Java / Kotlin : Maven `pom.xml`, Gradle `*gradle.lockfile` (un simple `build.gradle` ne prouve pas la couverture de dépendances) | Inventaire reconnu par le scanner, fixture vulnérable et saine, traçage version/règle |
 | B | .NET / C# : `*.csproj`, `packages.lock.json` | Dépendances résolues et cible identifiée ; tests sur lock absent/incomplet |
 | C | Rust : `Cargo.toml`, `Cargo.lock` | Dépendances avec versions réelles, canary positif et négatif |
 | D | Ruby : `Gemfile.lock`, PHP : `composer.lock` | Cibles reconnues distinctement ; tests d'avis et cas hors périmètre |
