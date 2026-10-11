@@ -177,6 +177,23 @@ les prochaines intégrations (Java/Kotlin, .NET, Rust, Ruby/PHP puis IaC),
 sans déclarer une couverture avant validation d'un inventaire réel et de
 fixtures adversariales. Le banc `local-agents` demeure isolé.
 
+## Couverture de dépendances par stack — preuve Trivy
+
+Le scanner Trivy fournit désormais `stack-coverage.json` dans ses artifacts,
+avec un tableau par écosystème et les nombres de manifests présents et
+effectivement reconnus : Go, Python requirements, npm, pnpm, Maven,
+Gradle verrouillé, Rust/Cargo, Ruby/Bundler et PHP/Composer.
+Un fichier présent sans cible Trivy du bon type est marqué
+`INCOMPLETE` et provoque **l'échec du contrôle**, jamais une conclusion
+« zéro vulnérabilité ». Les fichiers de build sans verrou (`build.gradle`,
+`Cargo.toml`, `package.json`) sont `MANIFEST_ONLY` plutôt que
+considérés scannés ; les indices .NET sont `UNVERIFIED` tant que la
+preuve NuGet n'a pas été calibrée.
+
+Il s'agit de l'inventaire des **cibles reconnues**, pas d'une preuve de
+couverture exhaustive du langage ni d'exploitabilité. Les artifacts ne
+reproduisent pas le contenu des manifests ni les chemins des projets.
+
 ## Contrôles positifs et couverture des dépendances
 
 L'audit ne se contente plus de vérifier qu'un scanner termine sans erreur :
