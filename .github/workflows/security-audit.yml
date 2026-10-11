@@ -213,8 +213,20 @@ jobs:
           python -m pip install 'lizard==1.17.10' 'defusedxml==0.7.1'
           lizard --xml . > "$RUNNER_TEMP/maintainability/lizard.xml"
 
+      - name: Charger le générateur Markdown de maintenabilité
+        if: always()
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 20faf42a7473dc8f86b243f6fde88f1ec4f36e5a
+          path: .audit-report-tools
+          persist-credentials: false
+
+
       - name: Report metrics
         if: always()
+        env:
+          PYTHONPATH: .audit-report-tools
         run: |
           python3 - <<'PY'
           import json
@@ -242,23 +254,14 @@ jobs:
                       count = sum(v.get("mi", 100) < 20 for v in data.values() if isinstance(v, dict))
                   summary.write(f"- **{metric}** : {count}. {description}\n")
               xml = root / "lizard.xml"
-              if xml.exists():
-                  from defusedxml import ElementTree as ET
-                  tree = ET.parse(xml)
-                  functions = tree.findall(".//item")
-                  high = sum(int(node.get("value", "0")) >= 15 for node in tree.findall(".//measure[@type='Function']/value"))
-                  summary.write(f"- **Lizard : complexité multi-langage** : {high} valeurs >= 15 (entrées XML analysées : {len(functions)}). Aide à repérer les fonctions complexes.\n")
+              if not xml.is_file():
+                  raise RuntimeError("Lizard: rapport absent, impossible de conclure")
+              from scripts.maintainability_to_markdown import lizard_complexity
+              high, total = lizard_complexity(xml)
+              summary.write(f"- **Lizard : complexité multi-langage** : {high} fonction(s) de CCN >= 15 sur {total} fonctions mesurées. Indice de complexité, pas un bug.\n")
               summary.write("\n**Interprétation :** ces indicateurs sont informatifs et ne bloquent pas la CI. Rapports JSON/XML dans l’artifact `maintainability-*`.\n")
           PY
 
-      - name: Charger le générateur Markdown de maintenabilité
-        if: always()
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: loic31000/security-ci
-          ref: fb9850ff5e14c14d527cec3b2656bff1b3ab1fef
-          path: .audit-report-tools
-          persist-credentials: false
 
       - name: Générer maintainability.md
         if: always()
