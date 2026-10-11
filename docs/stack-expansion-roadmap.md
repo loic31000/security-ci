@@ -58,6 +58,26 @@ activation d'une famille devra établir :
 - Comparaison d'un essai sur branche isolée avec une baseline connue, sans
   fusionner des changements dans le dépôt d'essai.
 
+### Lot A.1 — expérimentation Java/Gradle (pas encore couverture générale)
+
+Le job de dépendances du moteur expérimente maintenant **Trivy v0.70.0**
+sur deux verrous Gradle générés dans le runner : une dépendance
+`log4j-core:2.14.1` volontairement exposée aux avis connus et une
+dépendance de démonstration bénigne `slf4j-api:2.0.17`. Les deux rapports
+JSON doivent **reconnaître exactement `gradle.lockfile` comme cible** ;
+l'outil doit identifier l'ancienne version de Log4j en HIGH/CRITICAL et
+ne produire aucun avis sur la fixture bénigne. Le garde
+`scripts/java_gradle_probe.py` rejette un inventaire absent, une cible
+mal nommée, un mauvais type d'analyse ou un paquet/version erroné.
+Les rapports et le bilan JSON sont conservés comme preuves.
+
+**Aucune de ces observations ne prouve** la couverture Java/Kotlin
+source, Maven, les dépendances transitives ou les failles exploitables.
+Seul le comportement de Trivy sur ces deux verrous isolés est évalué.
+Le lot A.2 restera consacré à Maven `pom.xml` et à ses particularités
+de résolution distant/locale. Un blocage réseau Maven ne doit jamais
+être décrit comme un scan réussi ou zéro alerte.
+
 ## Règles de livraison
 
 Les améliorations du moteur passent par PR et ses contrôles GitHub Actions,
