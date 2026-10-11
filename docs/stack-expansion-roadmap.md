@@ -32,6 +32,25 @@ fixtures indépendantes en nombre suffisant pour mesurer séparément : les chem
 sur code bénin, les erreurs de configuration, les exclusions et les changements
 de versions, avec revue humaine de tout échec inattendu.
 
+## Diagnostic de provenance Semgrep — blocage P0
+
+Lorsque les trois tentatives du registre échouent à obtenir les **225 règles
+à l'empreinte SHA-256 approuvée**, le scan reste en **échec technique**.
+L'artifact d'échec `security-semgrep-*` peut maintenant contenir
+`semgrep-registry-drift.json` avec seulement : SHA approuvé/observé,
+taille, nombre d'IDs lus, nombre d'IDs distincts et empreinte d'IDs triés.
+**Aucun texte de règle, message, identifiant de règle ou extrait de code
+n'est reproduit.** Cette preuve sert à différencier la dérive des règles,
+les réponses malformées et les problèmes d'infrastructure. Elle **ne
+constitue jamais une nouvelle approbation** du registre. Le profil original
+n'est pas conservé dans les artifacts.
+
+L'[incident #29](https://github.com/loic31000/security-ci/issues/29) doit
+être qualifié avant changement du SHA de référence. Les conditions de la
+licence Semgrep Rules interdisent de redistribuer les règles dans le dépôt.
+La stabilité du registre reste une limite de disponibilité indépendante
+de la précision des scanners.
+
 ## Étape suivante — étendre les stacks sans créer de faux « zéro alerte » (P1)
 
 Ordre proposé, **à réévaluer avec les usages réels** :
