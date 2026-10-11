@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "reference_commit": "afa10906704d3481e48ea56ad875f00b6058c8f7",
+  "note": "SHA-256 baseline of the four actual manifests from successful engine dependency audit run 38125367959; any resolution drift must be reviewed, not silently accepted.",
+  "files": {
+    "python/requirements.txt": "aff0871f8b60518b06252ba1cd67da02ded5dabac853b12679f178fde4f11c40",
+    "node/package-lock.json": "7046167822f40036edb092b968f8a40d3584b1703dd2c0f958785e35b85c15c3",
+    "go/go.mod": "885f64a87ccc4c8ac08f74e5237d151ba8f2449398d6b5f4471aed48ef9c6140",
+    "go/go.sum": "c00e27f2a7aeb8b5b26fcefb8f08878f1a247dbd811c760df724e1e0958467e9"
+  }
+}
