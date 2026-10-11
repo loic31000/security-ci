@@ -135,10 +135,10 @@ def main():
                 state, targets = trivy_coverage
                 if state == "NOT_APPLICABLE":
                     summary.write("**AUCUNE CIBLE RECONNUE PAR TRIVY : couverture non établie.** "
-                                  "Un résultat sans alerte ne prouve pas que les dépendances sont sûres.\\n")
+                                  "Un résultat sans alerte ne prouve pas que les dépendances sont sûres.\n")
                 else:
                     summary.write(f"**Cibles reconnues par Trivy : {targets}.** "
-                                  "Les résultats ne couvrent que ces cibles et filtres.\\n")
+                                  "Les résultats ne couvrent que ces cibles et filtres.\n")
         summary.write("\nConsulter le SARIF, confirmer le contexte et la pertinence avant toute correction.\n")
     return 1 if failed else 0
 
