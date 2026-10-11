@@ -89,12 +89,18 @@ jobs:
           go-version: '1.25.x'
           cache: false
 
-      - name: Installer Gitleaks
+      - name: Charger le script de compilation Gitleaks
         if: matrix.scanner == 'gitleaks'
-        working-directory: ${{ runner.temp }}
-        run: |
-          GOBIN="$RUNNER_TEMP/security-bin" \
-            go install github.com/zricethezav/gitleaks/v8@v8.30.1
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 196d52edeeb4f8cfa557cd0799b80abe90f9425b
+          path: .audit-gitleaks-build
+          persist-credentials: false
+
+      - name: Compiler Gitleaks avec ses dépendances corrigées
+        if: matrix.scanner == 'gitleaks'
+        run: bash .audit-gitleaks-build/scripts/build_gitleaks.sh "$RUNNER_TEMP/gitleaks-module" "$RUNNER_TEMP/security-bin"
 
       - name: Analyser avec Trivy
         id: trivy
