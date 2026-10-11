@@ -129,6 +129,23 @@ rejeté. Les problèmes de syntaxe et d'expressions sont des problèmes
 d'intégration CI, pas des vulnérabilités confirmées. Ce job ne s'applique
 qu'au dépôt central.
 
+## Contrôles négatifs et préparation à une version stable
+
+En plus des exemples synthétiques détectables, le moteur teste désormais
+quatre exemples **légitimes** qui ne doivent pas déclencher d'alerte :
+une fonction Python normale (Semgrep), un texte de documentation sans clé
+(Gitleaks), un workflow GitHub Actions à permissions minimales (zizmor),
+et deux fonctions distinctes (jscpd). Ces tests sont exécutés sur runners
+éphémères, avec les mêmes versions/configurations que l'analyse principale.
+Ils vérifient des cas concrets, **pas une absence globale de faux positifs**.
+
+Le document [Préparation de la version stable](docs/release-readiness.md)
+énonce les preuves nécessaires pour envisager une première release :
+contrôles GitHub réussis, tests JUnit réels, contrôles positifs et négatifs,
+couverture des dépendances et **essai sur local-agents dans une branche qui
+ne sera jamais fusionnée**. Le script `scripts/release_readiness.py`
+vérifie la complétude des preuves, mais ne crée aucun tag ni aucune release.
+
 ## Contrôles positifs et couverture des dépendances
 
 L'audit ne se contente plus de vérifier qu'un scanner termine sans erreur :

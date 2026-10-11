@@ -258,6 +258,85 @@ jobs:
           print(f"zizmor canary: {count} expected warning(s) detected")
           PY
 
+      - name: Contrôle négatif - code légitime sans alerte Semgrep/Gitleaks
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'gitleaks'
+        run: |
+          set -euo pipefail
+          safe_dir="$RUNNER_TEMP/security-benign-control"
+          mkdir -p "$safe_dir"
+          if [[ "$SCANNER" == "semgrep" ]]; then
+            cat > "$safe_dir/legitimate.py" <<'PY'
+          def compute_invoice_total(values):
+              return sum(values)
+          PY
+            semgrep scan --config "$SEMGREP_CONFIG_PATH" --metrics off \
+              --disable-version-check --sarif \
+              --output "$safe_dir/semgrep.sarif" "$safe_dir/legitimate.py"
+          else
+            cat > "$safe_dir/placeholder.txt" <<'TXT'
+          Documentation: TOKEN_PLACEHOLDER_IS_NOT_A_REAL_SECRET
+          Example URL: https://example.org/account/help
+          TXT
+            "$RUNNER_TEMP/security-bin/gitleaks" dir "$safe_dir" \
+              --redact=100 --report-format sarif \
+              --report-path "$safe_dir/gitleaks.sarif" \
+              --exit-code 0 --no-banner
+          fi
+          python3 - "$safe_dir/$SCANNER.sarif" "$SCANNER" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if report.get("version") != "2.1.0" or not isinstance(report.get("runs"), list) or not report["runs"]:
+              raise SystemExit("Negative control: missing or invalid SARIF; never call it clean")
+          count = 0
+          for run in report["runs"]:
+              if not isinstance(run, dict) or not isinstance(run.get("results"), list):
+                  raise SystemExit("Negative control: incomplete SARIF results")
+              if not isinstance(run.get("tool", {}).get("driver", {}).get("name"), str):
+                  raise SystemExit("Negative control: missing scanner identity")
+              count += len(run["results"])
+          if count != 0:
+              raise SystemExit(f"Negative control: {count} unexpected candidate(s) in benign fixture")
+          print(f"{sys.argv[2]} negative control: 0 findings on limited benign fixture")
+          PY
+
+      - name: Contrôle négatif - workflow GitHub Actions légitime pour zizmor
+        if: matrix.scanner == 'zizmor'
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/zizmor-benign-control"
+          mkdir -p "$fixture/.github/workflows"
+          cat > "$fixture/.github/workflows/benign.yml" <<'YAML'
+          name: Benign read-only workflow
+          on: push
+          permissions:
+            contents: read
+          jobs:
+            test:
+              runs-on: ubuntu-24.04
+              steps:
+                - name: Print fixture
+                  run: echo "no secrets and no unsafe action"
+          YAML
+          zizmor --offline --strict-collection --min-severity medium --format sarif \
+            "$fixture" > "$fixture/result.sarif"
+          python3 - "$fixture/result.sarif" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          doc = json.loads(Path(sys.argv[1]).read_text())
+          runs = doc.get("runs")
+          if doc.get("version") != "2.1.0" or not isinstance(runs, list) or not runs:
+              raise SystemExit("zizmor negative control: incomplete SARIF")
+          if any(not isinstance(r.get("results"), list) for r in runs):
+              raise SystemExit("zizmor negative control: results missing")
+          count = sum(len(r["results"]) for r in runs)
+          if count:
+              raise SystemExit(f"zizmor negative control: {count} findings on benign workflow")
+          print("zizmor negative control: no findings on the read-only workflow")
+          PY
+
       - name: Charger le validateur SARIF du moteur central
         if: always()
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -446,6 +525,37 @@ jobs:
           if not duplicates:
               raise SystemExit("jscpd failed to report an identical 32-line function")
           print(f"jscpd positive control: {len(duplicates)} exact clone(s) detected")
+          PY
+
+      - name: Verify different functions are NOT reported as duplicates
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/jscpd-benign-control"
+          mkdir -p "$fixture/source" "$fixture/reports"
+          python3 - "$fixture/source" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+          for label in ("alpha", "bravo"):
+              lines = [f"def compute_{label}(input_value):"]
+              lines += [f"    unique_{label}_{n} = input_value + '{label}_value_{n}'" for n in range(1, 35)]
+              lines.append(f"    return unique_{label}_34")
+              (root / (label + ".py")).write_text("\n".join(lines) + "\n")
+          PY
+          "$RUNNER_TEMP/security-jscpd/node_modules/.bin/jscpd" \
+            --mode strict --min-tokens 100 --min-lines 10 \
+            --reporters json --output "$fixture/reports" --threshold 100 "$fixture/source"
+          python3 - "$fixture/reports/jscpd-report.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          report = json.loads(Path(sys.argv[1]).read_text())
+          duplicates = report.get("duplicates")
+          if not isinstance(duplicates, list):
+              raise SystemExit("jscpd negative control: report missing duplicates inventory")
+          if duplicates:
+              raise SystemExit(f"jscpd negative control: {len(duplicates)} unexpected duplicate(s)")
+          print("jscpd negative control: 0 duplicates in independent functions")
           PY
 
       - name: Measure Python complexity and maintainability
