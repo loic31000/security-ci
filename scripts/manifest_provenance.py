@@ -53,11 +53,21 @@ def verify_cyclonedx(document):
     components = document.get("components")
     if not isinstance(components, list) or not components:
         raise EvidenceError("CycloneDX SBOM contains no components")
+    names = set()
     for component in components:
         if not isinstance(component, dict) or not isinstance(component.get("name"), str):
             raise EvidenceError("CycloneDX component missing name")
-        if not component["name"].strip() or not isinstance(component.get("version"), str):
-            raise EvidenceError("CycloneDX component has no name or version")
+        name = component["name"]
+        if not name.strip() or component.get("type") not in ("application", "library", "framework", "file"):
+            raise EvidenceError("CycloneDX component has invalid name or type")
+        version = component.get("version")
+        # CycloneDX permits unversioned application roots and local Go modules.
+        if version is not None and (not isinstance(version, str) or not version.strip()):
+            raise EvidenceError("CycloneDX component has invalid version")
+        names.add(name)
+    needed = set(EXPECTED) - {"go/go.sum"}
+    if not needed.issubset(names):
+        raise EvidenceError("CycloneDX missing one or more of the three audited root manifests")
     return len(components)
 
 
