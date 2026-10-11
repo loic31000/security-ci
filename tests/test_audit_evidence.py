@@ -51,6 +51,38 @@ class AuditEvidenceTest(unittest.TestCase):
             with self.assertRaises(cov.InventoryError):
                 cov.assess_inventory(invalid)
 
+    def test_resolved_toolchain_report_detects_all_target_families(self):
+        audit = load("toolchain_audit")
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for p in audit.MANIFESTS:
+                file = root / p
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("generated dependencies")
+            report = root / "result.json"
+            report.write_text(json.dumps({"SchemaVersion": 2, "Results": [
+                {"Target": "python/requirements.txt", "Vulnerabilities": []},
+                {"Target": "node/package-lock.json", "Vulnerabilities": []},
+                {"Target": "go/go.mod", "Vulnerabilities": []}
+            ]}))
+            summary = audit.summarize(root, report)
+            self.assertEqual(summary["targets"], 3)
+            self.assertFalse(summary["missing_coverage"])
+            self.assertFalse(summary["vulnerabilities"])
+
+    def test_toolchain_missing_targets_not_treated_as_clean(self):
+        audit = load("toolchain_audit")
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for p in audit.MANIFESTS:
+                file = root / p
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("generated")
+            report = root / "result.json"
+            report.write_text(json.dumps({"SchemaVersion": 2, "Results": []}))
+            with self.assertRaises(ValueError):
+                audit.summarize(root, report)
+
     def test_junit_requires_fresh_nonempty_passing_cases(self):
         v = load("test_report_validator")
         with tempfile.TemporaryDirectory() as d:
