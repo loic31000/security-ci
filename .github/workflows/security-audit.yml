@@ -72,15 +72,24 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Installer Semgrep
+      - name: Charger les versions et hachages Python approuvés
+        if: matrix.scanner == 'semgrep' || matrix.scanner == 'zizmor'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
+          path: .audit-python-lock
+          persist-credentials: false
+
+      - name: Installer Semgrep et ses dépendances avec hachages vérifiés
         if: matrix.scanner == 'semgrep'
         working-directory: ${{ runner.temp }}
-        run: python -m pip install 'semgrep==1.179.0'
+        run: python -m pip install --disable-pip-version-check --require-hashes --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-tools.txt"
 
-      - name: Installer zizmor
+      - name: Installer zizmor avec hachages vérifiés
         if: matrix.scanner == 'zizmor'
         working-directory: ${{ runner.temp }}
-        run: python -m pip install 'zizmor==1.30.1'
+        run: python -m pip install --disable-pip-version-check --require-hashes --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-zizmor.txt"
 
       - name: Préparer Go
         if: matrix.scanner == 'gitleaks'
@@ -94,7 +103,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 465ff2471dd53aa376efa2cf86c794b3e5b5dd25
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
           path: .audit-gitleaks-build
           persist-credentials: false
 
@@ -313,6 +322,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Load verified Python maintenance locks
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
+          path: .audit-python-lock
+          persist-credentials: false
+
+      - name: Install Radon, Lizard and defusedxml with hashes
+        run: python -m pip install --disable-pip-version-check --require-hashes --no-cache-dir -r .audit-python-lock/locks/python-maintainability.txt
+
       - name: Measure duplication
         run: |
           mkdir -p "$RUNNER_TEMP/maintainability"
@@ -348,13 +368,11 @@ jobs:
 
       - name: Measure Python complexity and maintainability
         run: |
-          python -m pip install 'radon==6.0.1'
           radon cc . -j -i 'node_modules,vendor,dist,build,.venv,coverage' > "$RUNNER_TEMP/maintainability/python-complexity.json"
           radon mi . -j -i 'node_modules,vendor,dist,build,.venv,coverage' > "$RUNNER_TEMP/maintainability/python-maintainability.json"
 
       - name: Measure multi-language complexity
         run: |
-          python -m pip install 'lizard==1.17.10' 'defusedxml==0.7.1'
           lizard --xml . > "$RUNNER_TEMP/maintainability/lizard.xml"
 
       - name: Charger le générateur Markdown de maintenabilité
@@ -462,9 +480,18 @@ jobs:
             echo "caller_test=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Installer les dépendances des tests du moteur
+      - name: Charger les dépendances des tests du moteur approuvées
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
-        run: python -m pip install 'defusedxml==0.7.1'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
+          path: .audit-python-lock
+          persist-credentials: false
+
+      - name: Installer les dépendances de tests avec hachages vérifiés
+        if: ${{ steps.test_config.outputs.self_test == 'true' }}
+        run: python -m pip install --disable-pip-version-check --require-hashes --no-cache-dir -r .audit-python-lock/locks/python-report-tests.txt
 
       - name: Tester le moteur security-ci
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
@@ -490,12 +517,21 @@ jobs:
           path: .audit-cert-tools
           persist-credentials: false
 
+      - name: Charger les dépendances du vérificateur JUnit
+        if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 2768c04d5b22601643c48c2c45b6c57757ed9b26
+          path: .audit-python-lock
+          persist-credentials: false
+
       - name: Certify at least one freshly executed JUnit test
         if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
         env:
           TEST_REPORT_PATH: ${{ inputs.test_report_path }}
         run: |
-          python -m pip install 'defusedxml==0.7.1'
+          python -m pip install --disable-pip-version-check --require-hashes --no-cache-dir -r .audit-python-lock/locks/python-report-tests.txt
           python .audit-cert-tools/scripts/test_report_validator.py \
             --path "$TEST_REPORT_PATH" \
             --workspace "$GITHUB_WORKSPACE" \
