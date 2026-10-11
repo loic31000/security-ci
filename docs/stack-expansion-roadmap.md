@@ -128,6 +128,19 @@ dépendances transitives complètes.** Trivy peut résoudre des dépendances
 Maven via réseau ; une erreur HTTP 429 ou un graphe tronqué devra être
 signalé distinctement dans le futur lot A.2.
 
+### Lot A.2 — preuve Maven POM à qualifier
+
+Le moteur expérimente deux scans Trivy séparés sur des `pom.xml`
+synthétiques : Log4j 2.14.1 comme contrôle positif, et SLF4J 2.0.17
+comme contrôle négatif. Le garde `java_maven_probe.py` exige une cible
+exacte `pom.xml` avec analyseur Trivy `pom`, un avis HIGH/CRITICAL
+sur le paquet/version attendus, et zéro avis sur l'exemple bénin.
+Les rapports sont archivés. Une erreur de résolution réseau (notamment
+HTTP 429), une absence de cible ou un inventaire incomplet **bloque**
+la qualification : le scan n'est jamais réputé « propre » par défaut.
+Les dépendances transitives, le code Java/Kotlin et les builds Maven
+complets restent hors de cette preuve limitée.
+
 ## Règles de livraison
 
 Les améliorations du moteur passent par PR et ses contrôles GitHub Actions,
