@@ -11,6 +11,14 @@ on:
         description: Commande de tests du dépôt appelant (obligatoire pour les dépôts externes)
         type: string
         default: ''
+      require_test_report:
+        description: Exiger un fichier JUnit XML récent contenant au moins un test réussi (mode strict)
+        type: boolean
+        default: false
+      test_report_path:
+        description: Chemin relatif du fichier JUnit XML produit par test_command
+        type: string
+        default: ''
       coverage_paths:
         description: Chemins de rapports de couverture à archiver (optionnels, séparés par des retours à la ligne)
         type: string
@@ -21,6 +29,8 @@ on:
         description: Activer le mode strict
         type: boolean
         default: false
+  schedule:
+    - cron: '17 4 * * 1'
   push:
     branches: [main]
   pull_request:
@@ -105,6 +115,23 @@ jobs:
           cache: false
           cache-dir: ${{ runner.temp }}/trivy-cache
 
+      - name: Inventorier les cibles effectivement reconnues par Trivy
+        id: trivy_inventory
+        if: matrix.scanner == 'trivy' && steps.trivy.outcome == 'success'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/security-reports/trivy-targets.json
+          exit-code: '0'
+          timeout: 15m
+          cache: false
+
       - name: Analyser avec Semgrep, Gitleaks ou zizmor
         id: scan
         if: matrix.scanner != 'trivy'
@@ -140,7 +167,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 0ef82dff446e447c914fb1b9ac91fd496ce53a75
+          ref: 1fdcac6493d2d77e890dd95cf2e554ee062c2e9e
           path: .audit-decision-tools
           persist-credentials: false
 
@@ -149,6 +176,7 @@ jobs:
         env:
           SCAN_OUTCOME: ${{ steps.scan.outcome }}
           TRIVY_OUTCOME: ${{ steps.trivy.outcome }}
+          TRIVY_INVENTORY_OUTCOME: ${{ steps.trivy_inventory.outcome }}
         run: python3 .audit-decision-tools/scripts/sarif_decision.py
 
       - name: Charger le générateur de rapport Markdown
@@ -172,6 +200,7 @@ jobs:
           path: |
             ${{ runner.temp }}/security-reports/*.sarif
             ${{ runner.temp }}/security-reports/*.md
+            ${{ runner.temp }}/security-reports/*.json
           retention-days: 7
           if-no-files-found: warn
 
