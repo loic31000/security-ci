@@ -119,6 +119,32 @@ Les avis de vulnérabilité restant éventuellement présents sont
 **des candidats à examiner humainement**. Aucune alerte ne doit être
 ignorée pour rendre un compteur artificiellement vert.
 
+## Inventaire CycloneDX et détection de dérive
+
+Le job `Engine dependency audit` conserve maintenant dans son artifact :
+
+- `engine.cdx.json` : **SBOM CycloneDX** des dépendances reconnues.
+- `engine-provenance.json` : empreintes SHA-256 des quatre manifests
+  (`requirements.txt`, `package-lock.json`, `go.mod`, `go.sum`),
+  référence Git validée et empreinte du SBOM.
+- Les quatre manifests et le rapport Trivy brut, pour vérifier les preuves.
+
+Les empreintes approuvées se trouvent dans
+`locks/engine-manifest-sha256.json`, issues d'une exécution réussie de la
+chaîne. Si l'un des manifests change au cours de la résolution, le contrôle
+échoue : **une mise à jour transitive ne passe plus silencieusement**.
+
+Ce mécanisme est volontairement strict. Lorsqu'une dépendance doit évoluer,
+examiner les CVE, reproduire les tests des scanners, puis mettre à jour les
+empreintes de référence dans une PR dédiée. Un échec de dérive peut indiquer
+une **mise à jour légitime**, pas une faille ; il demande une revue.
+
+**Limites :** les empreintes détectent la dérive mais ne verrouillent pas
+encore tous les artefacts téléchargés ; le SBOM n'est pas une attestation
+signée et une nomenclature CycloneDX non vide n'est pas une garantie de
+couverture exhaustive. Le job vérifie séparément les trois familles de
+cibles Trivy.
+
 ## Rapports de sécurité lisibles pour les développeurs
 
 Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
