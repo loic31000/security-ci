@@ -28,6 +28,22 @@ de paramètres du compte, de quotas/facturation ou des runners.
 **Ce n'est ni une preuve de vulnérabilité du projet ni un résultat
 « zéro alerte »**.
 
+Nouvelle vérification du 11 octobre 2026 : le job Go autonome a été
+**relancé sur le même run GitHub Actions** (tentative 2) :
+https://github.com/loic31000/local-agents/actions/runs/38129746589/attempts/2
+Il a de nouveau échoué avant attribution d'un runner et avant toute étape ;
+les jobs de scanners sont eux aussi en échec. Les journaux bruts demandés
+à GitHub renvoient 404, ce qui ne permet pas d'identifier la cause de
+l'infrastructure à partir des données accessibles.
+
+**Action propriétaire requise sur GitHub :** ouvrir la tentative et son
+message d'erreur ; vérifier **Settings > Actions > General** ainsi que
+les **runners**, les quotas/minutes Actions, le statut de facturation
+et d'éventuelles restrictions du dépôt privé. Ces vérifications ne
+doivent pas changer `main`, la branche de test ou CyberHub. Les
+permissions de la connexion GitHub actuelle ne donnent pas accès à ces
+réglages de compte/dépôt.
+
 La branche de test reste en place pour un diagnostic ultérieur, **sans PR,
 sans fusion, sans altération de `main`**. Une fois les runners utilisables,
 mettre à jour le commit de Security CI vers le squash merge final,
