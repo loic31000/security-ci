@@ -57,6 +57,25 @@ jobs:
           git fetch --no-tags --depth=1 origin "$calibration_ref"
           git show "FETCH_HEAD:scripts/scanner_precision.py" |
             cmp - scripts/scanner_precision.py
+      - name: Verify actual Semgrep drift triage script matches tested source
+        run: |
+          set -euo pipefail
+          drift_ref="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          workflow = Path(".github/workflows/security-audit.yml").read_text(encoding="utf-8")
+          match = re.search(
+              r"(?ms)^\s+- name: Load SHA-pinned non-sensitive Semgrep drift diagnostics\s*.*?^\s+ref:\s+([a-f0-9]{40})\s*$",
+              workflow,
+          )
+          if not match:
+              raise SystemExit("missing pinned diagnostic script reference")
+          print(match.group(1))
+          PY
+          )"
+          git fetch --no-tags --depth=1 origin "$drift_ref"
+          git show "FETCH_HEAD:scripts/semgrep_drift_metadata.py" |
+            cmp - scripts/semgrep_drift_metadata.py
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Prove certification on real executed JUnit tests
