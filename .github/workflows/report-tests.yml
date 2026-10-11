@@ -76,6 +76,25 @@ jobs:
           git fetch --no-tags --depth=1 origin "$drift_ref"
           git show "FETCH_HEAD:scripts/semgrep_drift_metadata.py" |
             cmp - scripts/semgrep_drift_metadata.py
+      - name: Verify pinned stack coverage checker matches tested source
+        run: |
+          set -euo pipefail
+          coverage_ref="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          workflow = Path(".github/workflows/security-audit.yml").read_text(encoding="utf-8")
+          match = re.search(
+              r"(?ms)^\s+- name: Load tested stack coverage evidence checker\s*.*?^\s+ref:\s+([a-f0-9]{40})\s*$",
+              workflow,
+          )
+          if not match:
+              raise SystemExit("missing SHA-pinned stack checker")
+          print(match.group(1))
+          PY
+          )"
+          git fetch --no-tags --depth=1 origin "$coverage_ref"
+          git show "FETCH_HEAD:scripts/stack_coverage.py" |
+            cmp - scripts/stack_coverage.py
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Prove certification on real executed JUnit tests
