@@ -38,6 +38,25 @@ jobs:
           git fetch --no-tags --depth=1 origin "$renderer_ref"
           git show "FETCH_HEAD:scripts/sarif_to_markdown.py" |
             cmp - scripts/sarif_to_markdown.py
+      - name: Verify the executed precision checker matches the tested source
+        run: |
+          set -euo pipefail
+          calibration_ref="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          workflow = Path(".github/workflows/security-audit.yml").read_text(encoding="utf-8")
+          match = re.search(
+              r"(?ms)^\s+- name: Charger le validateur SARIF du moteur central\s*.*?^\s+ref:\s+([a-f0-9]{40})\s*$",
+              workflow,
+          )
+          if not match:
+              raise SystemExit("missing immutable precision checker reference")
+          print(match.group(1))
+          PY
+          )"
+          git fetch --no-tags --depth=1 origin "$calibration_ref"
+          git show "FETCH_HEAD:scripts/scanner_precision.py" |
+            cmp - scripts/scanner_precision.py
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Prove certification on real executed JUnit tests
