@@ -89,9 +89,45 @@ vérifiés contre le verrou central par tests de régression.
 
 **Limites :** cette vérification protège les téléchargements Python/Go du
 moteur, mais pas la totalité des actions, des règles Semgrep distantes ou des
-dépendances du projet appelant. Le lock npm `jscpd` et les bases Trivy
-sont contrôlés séparément. Un résultat sans vulnérabilité n'est jamais une
+dépendances du projet appelant. Le lock npm `jscpd` et les règles Semgrep sont désormais vérifiés comme
+expliqué ci-dessous ; les bases CVE Trivy continuent d'évoluer. Un résultat sans vulnérabilité n'est jamais une
 garantie de sécurité.
+
+## Verrous Semgrep et npm, et validation des workflows
+
+**Règles Semgrep approuvées :** le job télécharge le profil public
+`p/security-audit` depuis `https://semgrep.dev/c/p/security-audit`,
+puis vérifie son empreinte **SHA-256 exacte** et ses **225 identifiants de
+règles distincts** avant de l'utiliser. La référence approuvée est enregistrée
+dans `locks/semgrep-security-audit.json` et vérifiée par
+`scripts/verify_semgrep_bundle.py`. Le scan du dépôt et son contrôle positif
+utilisent **le même fichier YAML validé**. Le nombre de règles réellement
+exécutées dépend des langages et cibles du dépôt et ne doit pas être confondu
+avec 225.
+
+Lorsqu'un fournisseur modifie sa configuration, l'audit signale une
+**dérive de configuration** et s'arrête avant l'analyse Semgrep ; cela
+ne prouve **aucune vulnérabilité**. Après revue des différences de règles et
+validation des contrôles positifs, mettre à jour l'empreinte dans une PR
+séparée. Les règles ne sont pas recopiées dans le dépôt : un accès réseau au
+registre reste nécessaire.
+
+**jscpd npm :** `locks/jscpd/package-lock.json` reproduit exactement
+l'inventaire de dépendances npm approuvé et audité dans le SBOM. Le script
+`scripts/install_jscpd.sh` vérifie l'empreinte SHA-256 du lock,
+les versions `5.4.1`, les origines sur le registre npm et l'intégrité
+SHA-512 des archives, puis lance **`npm ci --ignore-scripts`** dans un dossier
+temporaire. Les deux contrôles jscpd (dépôt et duplication synthétique)
+emploient ce même binaire, et l'inventaire moteur utilise le même lock. Un
+téléchargement via `npx --yes` n'est plus effectué.
+
+**actionlint :** un job distinct vérifie les fichiers
+`.github/workflows/*.yml` de `security-ci` à l'aide de
+`actionlint 1.7.12`, dont l'archive de publication Linux est validée
+par SHA-256. Il vérifie aussi qu'un workflow volontairement invalide est
+rejeté. Les problèmes de syntaxe et d'expressions sont des problèmes
+d'intégration CI, pas des vulnérabilités confirmées. Ce job ne s'applique
+qu'au dépôt central.
 
 ## Contrôles positifs et couverture des dépendances
 
@@ -154,8 +190,9 @@ une **mise à jour légitime**, pas une faille ; il demande une revue.
 leurs hachages avant installation, puis les quatre manifests sont contrôlés
 après résolution. Le SBOM n'est pas une attestation signée et une nomenclature
 CycloneDX non vide n'est pas une garantie de couverture exhaustive. Les
-règles Semgrep téléchargées, les actions et les téléchargements npm nécessitent
-leurs propres contrôles ; le job vérifie séparément les trois familles Trivy.
+règles Semgrep et les téléchargements npm sont maintenant vérifiés par
+empreintes et hashes ; les actions sont épinglées par SHA, et le job vérifie
+séparément les trois familles Trivy.
 
 ## Rapports de sécurité lisibles pour les développeurs
 
