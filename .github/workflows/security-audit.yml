@@ -84,12 +84,14 @@ jobs:
       - name: Installer Semgrep et ses dépendances avec hachages vérifiés
         if: matrix.scanner == 'semgrep'
         working-directory: ${{ runner.temp }}
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-tools.txt"
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-tools.txt"
 
       - name: Installer zizmor avec hachages vérifiés
         if: matrix.scanner == 'zizmor'
         working-directory: ${{ runner.temp }}
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-zizmor.txt"
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r "$GITHUB_WORKSPACE/.audit-python-lock/locks/python-zizmor.txt"
 
       - name: Préparer Go
         if: matrix.scanner == 'gitleaks'
@@ -331,7 +333,8 @@ jobs:
           persist-credentials: false
 
       - name: Install Radon, Lizard and defusedxml with hashes
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r .audit-python-lock/locks/python-maintainability.txt
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r .audit-python-lock/locks/python-maintainability.txt
 
       - name: Measure duplication
         run: |
@@ -491,7 +494,8 @@ jobs:
 
       - name: Installer les dépendances de tests avec hachages vérifiés
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r .audit-python-lock/locks/python-report-tests.txt
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r .audit-python-lock/locks/python-report-tests.txt
 
       - name: Tester le moteur security-ci
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
