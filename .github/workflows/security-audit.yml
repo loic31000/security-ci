@@ -92,7 +92,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: b9931c3e5da7a2dcd90554c46c773892932d911a
+          ref: 3b5bf13819d5a998c89fb546088c902a6143658c
           path: .audit-drift-tools
           persist-credentials: false
 
