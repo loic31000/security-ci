@@ -102,6 +102,35 @@ l'équivalence de toute la configuration ou du moteur Semgrep. Si le YAML
 réel approuvé n'est pas disponible, la comparaison reste
 `INCOMPARABLE`, et l'incident #29 n'est pas résolu.
 
+### Empreinte canonique comparée entre runners — preuve P0
+
+Lorsque le job Semgrep obtient le YAML **exactement approuvé**, le
+moteur produit maintenant `semgrep-rule-fingerprint.json` en mode
+`APPROVED_YAML`. Si le fournisseur ne fournit qu'un JSON non approuvé
+et que le scan échoue, le même programme calcule une empreinte en mode
+`UNAPPROVED_OBSERVATION`, **sans exécuter le JSON**.
+
+Le programme `scripts/semgrep_ruleset_fingerprint.py` parse les objets
+de règles et calcule une empreinte SHA-256 unique à partir des identifiants
+et du contenu de tous les objets, avec tri et normalisation déterministes.
+L'artefact ne contient **ni identifiants de règles, ni empreintes
+individuelles, ni motifs, ni messages** : seulement le digest global,
+la famille du format, le nombre d'objets et le statut de provenance.
+Le script utilisé est SHA-pinné et comparé au fichier testé.
+
+Une identité de ces digests sur deux runs différents établit une
+**égalité des objets de règles parsés selon cette normalisation**, sous
+les hypothèses cryptographiques de SHA-256. Elle ne prouve pas que les
+réponses sont identiques octet par octet, ni l'équivalence des paramètres
+hors `rules`, ni le comportement réel du scanner. Une différence de
+digest exige une revue privée des règles : pas d'identifiants ou de
+règles brutes dans GitHub Actions ou les issues.
+
+**Le résultat n'est jamais utilisé dans le contrôle d'intégrité**.
+La seule autorisation d'exécution reste le SHA exact du YAML approuvé,
+son format et ses 225 identifiants uniques. L'échec du registre demeure
+bloquant. Aucun digest canonique ne peut autoriser un nouveau profil.
+
 ## Étape suivante — étendre les stacks sans créer de faux « zéro alerte » (P1)
 
 Ordre proposé, **à réévaluer avec les usages réels** :
