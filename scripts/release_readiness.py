@@ -37,7 +37,8 @@ def validate(evidence):
         issues.append("fewer than 58 freshly validated JUnit cases")
     coverage = evidence.get("engine_coverage")
     if not isinstance(coverage, dict) or (
-        set(coverage.get("targets", [])) != {"python", "node", "go"}
+        not isinstance(coverage.get("targets"), list)
+        or set(coverage["targets"]) != {"python", "node", "go"}
         or coverage.get("state") != "SCANNED"
     ):
         issues.append("incomplete Python/Node/Go dependency scanner coverage")
@@ -61,9 +62,11 @@ def validate(evidence):
     ):
         issues.append("successful unmerged isolated local-agents trial not evidenced")
     for name in ("security_ci_run_url", "tests_run_url", "engine_run_url", "external_run_url"):
+        repo = "local-agents" if name == "external_run_url" else "security-ci"
+        prefix = f"https://github.com/loic31000/{repo}/actions/runs/"
         url = evidence.get(name, "")
-        if not isinstance(url, str) or not url.startswith("https://github.com/loic31000/") or "/actions/runs/" not in url:
-            issues.append(f"missing GitHub evidence URL: {name}")
+        if not isinstance(url, str) or not url.startswith(prefix) or not url[len(prefix):].isdigit():
+            issues.append(f"missing valid {repo} GitHub evidence URL: {name}")
     if evidence.get("human_cve_reviewed") is not True:
         issues.append("open CVE candidates have not been triaged by a human")
     return issues
