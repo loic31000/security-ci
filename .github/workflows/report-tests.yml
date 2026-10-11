@@ -46,14 +46,21 @@ jobs:
           import os
           from pathlib import Path
           file = Path(os.environ["RUNNER_TEMP"]) / "semgrep-bootstrap/rules.json"
-          data = json.loads(file.read_text())
-          rules = data.get("rules")
-          if not isinstance(rules, list) or len(rules) < 100:
-              raise SystemExit("Semgrep Registry returned unexpectedly few rules")
-          ids = [r.get("id") for r in rules]
-          if len(set(ids)) != len(ids):
-              raise SystemExit("Duplicate Semgrep rule IDs in registry response")
-          print(f"Rules downloaded: {len(rules)}")
+          body = file.read_text()
+          print(f"SEMGREP_CONFIG_LENGTH={len(body)}")
+          print(f"SEMGREP_CONFIG_PREFIX={body[:180]!r}")
+          try:
+              data = json.loads(body)
+          except json.JSONDecodeError:
+              print("Public registry response is not JSON; determine format before pinning")
+          else:
+              rules = data.get("rules")
+              if not isinstance(rules, list) or len(rules) < 100:
+                  raise SystemExit("Semgrep Registry returned unexpectedly few rules")
+              ids = [r.get("id") for r in rules]
+              if len(set(ids)) != len(ids):
+                  raise SystemExit("Duplicate Semgrep rule IDs in registry response")
+              print(f"Rules downloaded: {len(rules)}")
           print(f"SEMGREP_BUNDLE_SHA256={hashlib.sha256(file.read_bytes()).hexdigest()}")
           PY
       - name: Preserve public Semgrep config for offline inspection
