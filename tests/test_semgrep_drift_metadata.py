@@ -21,6 +21,7 @@ class RegistryDriftTest(unittest.TestCase):
     def test_approved_payload_is_not_self_authorizing(self):
         data = subject.inspect_payload(self.raw, self.lock)
         self.assertEqual(data["status"], "APPROVED")
+        self.assertEqual(data["diagnostic_category"], "APPROVED")
         self.assertFalse("DO_NOT_PUBLISH_RULE_CONTENT" in json.dumps(data))
         self.assertFalse('"p0"' in json.dumps(data))
         self.assertEqual(data["authorization"], "NEVER: diagnostics do not approve rules")
@@ -29,6 +30,7 @@ class RegistryDriftTest(unittest.TestCase):
         raw = self.raw.replace(b"p1", b"p2")
         data = subject.inspect_payload(raw, self.lock)
         self.assertEqual(data["status"], "UNAPPROVED")
+        self.assertEqual(data["diagnostic_category"], "YAML_DIGEST_MISMATCH")
         self.assertEqual(data["parsed_rule_count"], 2)
         self.assertFalse(data["matches_approved_sha256"])
         for value in ("p0", "p2", "DO_NOT_PUBLISH_RULE_CONTENT"):
@@ -44,6 +46,7 @@ class RegistryDriftTest(unittest.TestCase):
         data = subject.inspect_payload(json.dumps(source).encode(), self.lock)
         self.assertEqual(data["status"], "UNAPPROVED")
         self.assertEqual(data["response_format"], "json")
+        self.assertEqual(data["diagnostic_category"], "JSON_FORMAT_UNAPPROVED")
         self.assertEqual(data["parsed_rule_count"], 2)
         self.assertEqual(data["distinct_rule_count"], 2)
         self.assertFalse(data["matches_approved_sha256"])
@@ -58,6 +61,29 @@ class RegistryDriftTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertNotEqual(
                     subject.inspect_payload(raw, self.lock)["status"], "APPROVED")
+
+    def test_malformed_and_missing_rule_inventory_have_distinct_categories(self):
+        unrecognized = subject.inspect_payload(b'{"rules": "not-a-list"}', self.lock)
+        self.assertEqual(unrecognized["diagnostic_category"], "UNRECOGNIZED_RESPONSE")
+        duplicated = self.raw.replace(b"- id: p1", b"- id: p0")
+        mismatch = subject.inspect_payload(duplicated, self.lock)
+        self.assertEqual(mismatch["diagnostic_category"], "RULE_INVENTORY_MISMATCH")
+        fewer = subject.inspect_payload(
+            b'{"rules":[{"id":"p0"}]}', self.lock
+        )
+        self.assertEqual(fewer["diagnostic_category"], "RULE_INVENTORY_MISMATCH")
+        self.assertEqual(fewer["status"], "UNAPPROVED")
+
+    def test_same_rule_count_does_not_authorize_json(self):
+        data = subject.inspect_payload(
+            json.dumps({"rules": [{"id": "p0"}, {"id": "p1"}]}).encode(),
+            self.lock,
+        )
+        self.assertEqual(data["parsed_rule_count"], self.lock["rule_count"])
+        self.assertEqual(data["diagnostic_category"], "JSON_FORMAT_UNAPPROVED")
+        self.assertEqual(data["authorization"], "NEVER: diagnostics do not approve rules")
+        self.assertFalse(data["matches_approved_sha256"])
+        self.assertEqual(data["status"], "UNAPPROVED")
 
     def test_bad_count_duplicate_and_root_never_pass(self):
         for value in (self.raw.replace(b"- id: p1", b"- id: p0"),
