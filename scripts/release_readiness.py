@@ -18,6 +18,8 @@ EXPECTED_CHECKS = frozenset((
 ))
 SCANNERS = frozenset(("semgrep", "gitleaks", "zizmor", "jscpd", "trivy"))
 BENIGN = frozenset(("semgrep", "gitleaks", "zizmor", "jscpd"))
+EXTERNAL_JOBS = frozenset(("semgrep", "trivy", "gitleaks", "zizmor", "go_tests"))
+EXTERNAL_REPORTS = frozenset(("semgrep", "trivy", "gitleaks", "zizmor"))
 SHA_RE = re.compile(r"^[a-f0-9]{40}$")
 
 
@@ -61,6 +63,35 @@ def validate(evidence):
         or not SHA_RE.fullmatch(trial["commit"])
     ):
         issues.append("successful unmerged isolated local-agents trial not evidenced")
+    # A green string is insufficient: GitHub can fail before assigning a runner.
+    # These fields must be copied from job metadata and reviewed artifacts.
+    if isinstance(trial, dict):
+        if trial.get("security_ci_ref") != ref:
+            issues.append("external trial does not pin the reviewed security-ci commit")
+        jobs = trial.get("executed_jobs")
+        if not isinstance(jobs, dict):
+            issues.append("missing external GitHub jobs execution evidence")
+        else:
+            for name in EXTERNAL_JOBS:
+                job = jobs.get(name)
+                if not isinstance(job, dict) or (
+                    job.get("conclusion") != "success"
+                    or not isinstance(job.get("runner_name"), str)
+                    or not job["runner_name"].strip()
+                    or type(job.get("steps_executed")) is not int
+                    or job["steps_executed"] < 1
+                ):
+                    issues.append(f"external {name} job lacks executed steps and an assigned runner")
+        for name in ("go_tests_passed", "trivy_targets"):
+            value = trial.get(name)
+            if type(value) is not int or value < 1:
+                issues.append(f"external trial missing real nonzero {name}")
+        reports = trial.get("reports_verified")
+        if not isinstance(reports, dict) or any(
+            reports.get(name) is not True for name in EXTERNAL_REPORTS
+        ):
+            issues.append("external scanner reports missing or not reviewed")
+
     for name in ("security_ci_run_url", "tests_run_url", "engine_run_url", "external_run_url"):
         repo = "local-agents" if name == "external_run_url" else "security-ci"
         prefix = f"https://github.com/loic31000/{repo}/actions/runs/"
