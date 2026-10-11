@@ -1,518 +1,150 @@
 # Security CI
 
-Workflow GitHub Actions réutilisable pour auditer le code, les dépendances,
-les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
+**Des audits de sécurité directement dans les Pull Requests GitHub, sans installer quatre scanners à la main.**
 
-| Contrôle | Outil | Périmètre des alertes |
-|---|---|---|
-| SAST | Semgrep CE | Règles `p/security-audit` |
-| SCA / IaC | Trivy | HIGH et CRITICAL |
-| Secrets | Gitleaks CLI | Historique Git accessible, secrets masqués |
-| GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
-| Maintenabilité | jscpd + Radon + Lizard | Copies exactes suffisamment longues ; complexité Python et multi-langage |
+Security CI est un workflow GitHub Actions **réutilisable** : on ajoute un fichier YAML dans son propre dépôt et on obtient des rapports sur son code. Le projet est en préparation de sa première version stable ; **`v1.0.0` n'est pas publiée**.
 
-## Démarrage rapide — premier audit (exemple Go)
+Il lance les contrôles suivants :
 
-Dans **votre dépôt Go** (avec votre accord), créez
-`.github/workflows/security.yml` :
+| Contrôle | Ce qu'il cherche |
+| --- | --- |
+| **Semgrep** | Problèmes de sécurité possibles dans le code |
+| **Trivy** | Vulnérabilités de dépendances et configurations risquées, niveaux HIGH/CRITICAL |
+| **Gitleaks** | Secrets potentiellement présents dans l'historique Git |
+| **zizmor** | Risques dans les workflows GitHub Actions |
+| **Qualité (complément)** | Duplications, complexité du code et résultats des tests de votre projet |
+
+> **À retenir :** une alerte est un **signalement à vérifier**, pas une faille confirmée. Et un audit vert ne garantit pas que tout a été couvert.
+
+## 1. Avant de commencer
+
+Il faut :
+- Un dépôt sur GitHub, avec **GitHub Actions activé**.
+- Une **vraie commande qui lance les tests** de votre projet (par exemple `go test ./...`, `npm ci && npm test`).
+- L'autorisation d'ajouter un workflow au dépôt. Nous conseillons de le faire dans une **Pull Request**, avant toute activation sur la branche principale.
+
+Pas besoin d'installer Semgrep, Trivy, Gitleaks ou zizmor dans le dépôt. L'exemple ne demande pas de secret GitHub ni de `secrets: inherit`.
+
+## 2. Installer Security CI en 4 étapes
+
+**Étape 1 —** Dans votre dépôt GitHub, créez une branche de travail, puis ouvrez **Add file → Create new file**. Dans le nom du fichier, saisissez :
+
+```text
+.github/workflows/security.yml
+```
+
+**Étape 2 —** Collez cet exemple **pour un projet Go** :
 
 ```yaml
 name: Security
 on:
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   security:
-    uses: loic31000/security-ci/.github/workflows/security-audit.yml@e3c616b92c57725fd803013d3046939ed63a1c43
+    uses: loic31000/security-ci/.github/workflows/security-audit.yml@c08adcc4f22ba3348268a366f6cb3c3edbf96890
     with:
       enforce: false
       test_command: 'go test ./...'
 ```
 
-Cette révision est **épinglée à un commit dont les 10 contrôles CI ont réussi**,
-pas à une version `v1.0.0` publiée. Pour **Python, Node ou une autre stack**,
-remplacez la commande par celle qui exécute *vraiment* les tests de votre
-projet ; une commande vide fait échouer le job de tests. Ne remplacez pas
-la commande par `true` : ce ne serait pas une preuve de tests.
+La longue référence après `@` est un **commit précis déjà validé**, pour éviter qu'une mise à jour du moteur modifie silencieusement vos audits. Ce n'est **pas** une version publiée.
 
-1. Ouvrez la **Pull Request → Checks**, puis **Actions → exécution → Summary**.
-2. Pour les détails : **Artifacts → `security-semgrep-*`, `security-trivy-*`,
-   `security-gitleaks-*`, `security-zizmor-*`**, puis le fichier `.md`
-   dans l'archive. Les rapports bruts SARIF restent disponibles.
-3. Interprétez correctement le résultat :
+**Étape 3 —** Adaptez **uniquement `test_command`** à votre projet :
 
-| Ce qui apparaît | Ce que cela signifie |
+| Votre projet | Exemple de commande, à adapter |
 | --- | --- |
-| **Alertes** et job vert avec `enforce: false` | Des signalements restent **à vérifier** : vert ne veut pas dire « aucune faille ». |
-| **Aucune cible reconnue** | Le scanner n'a pas établi la couverture ; ce n'est pas « zéro vulnérabilité ». |
-| **Erreur technique** (dont règles Semgrep indisponibles) | Le contrôle **échoue même avec `enforce: false`** ; lire l'artifact de diagnostic, ne pas ignorer l'échec. |
+| Go | `go test ./...` |
+| Node.js / npm | `npm ci && npm test` (nécessite un `package-lock.json` et un script `test`) |
+| Python | `python -m pip install -r requirements.txt && python -m pytest` (nécessite `pytest` dans les dépendances installées) |
 
-Aucun secret ni `secrets: inherit` requis. L'exemple **n'installe rien
-dans vos autres dépôts** et ne modifie aucune protection de branche.
-Pour le mode bloquant et les tests certifiés, voir les sections ci-dessous.
+Vérifiez d'abord que cette commande fonctionne sur votre projet. La commande est exécutée **dans le dépôt audité**, dans un job séparé ; Security CI ne peut pas deviner comment installer ou tester votre application. **Sans `test_command`, le job de tests d'un dépôt externe échoue.** Ne mettez jamais `true` ou une commande fictive pour le faire passer au vert.
 
-## Lire les descriptions des audits
+**Étape 4 —** Enregistrez le fichier, ouvrez une **Pull Request** et consultez ses contrôles dans l'onglet **Checks**. Vous pouvez aussi ouvrir **Actions → Security** et lancer `workflow_dispatch` sur une branche où ce workflow existe.
 
-Chaque contrôle de sécurité affiche maintenant une phrase simple dans le résumé GitHub Actions, juste avant son tableau **État / Alertes / Mode** :
+L'ajout du workflow ne modifie pas vos fichiers applicatifs et ne déploie rien. Les protections de branche et le blocage des fusions restent des réglages GitHub distincts.
 
-- **Semgrep** : analyse le code et signale des problèmes de sécurité potentiels.
-- **Trivy** : détecte des vulnérabilités connues dans les dépendances et des erreurs de configuration, de sévérité élevée ou critique.
-- **Gitleaks** : recherche des secrets potentiels dans l'historique Git, sans afficher leur valeur.
-- **zizmor** : inspecte les workflows GitHub Actions et signale des pratiques risquées.
+## 3. Lire le premier résultat
 
-## Fiabilité des résultats et faux positifs
+Dans votre dépôt : **Actions → choisissez l'exécution Security → Summary** (ou **Pull Request → Checks**).
 
-**Un outil automatique ne peut pas garantir zéro faux positif, ni détecter
-100 % des vulnérabilités.** Les résultats affichés sont des **détections à
-confirmer**, jamais des « failles prouvées » sans vérification humaine.
+Vous y verrez plusieurs jobs : `Audit - semgrep`, `Audit - trivy`, `Audit - gitleaks`, `Audit - zizmor`, puis les contrôles de tests et de maintenabilité.
 
-- Les rapports SARIF sont contrôlés avant toute conclusion : version 2.1.0,
-  analyse réussie, identité du scanner, liste de résultats présente et
-  structure cohérente. Les erreurs techniques sont **bloquantes**, même en mode rapport.
-- Le compteur d'alertes actives ne retient que les résultats SARIF de type
-  `fail` et de niveau `warning` ou `error`. Les résultats `pass`,
-  `review`, `open`, `informational`, `note` et `none` sont identifiés
-  séparément comme **non bloquants**, sans les appeler « vulnérabilités ».
-- Une suppression SARIF explicitement **acceptée** est exclue des alertes
-  actives, mais reste traçable dans l'artifact. Une suppression en cours
-  d'examen ou rejetée reste active. Une suppression ne démontre pas que
-  le code est sécurisé : elle doit être justifiée et revue.
-- En mode `enforce: true`, ce sont les **alertes actives du scanner** qui
-  bloquent la CI, pas nécessairement des failles exploitables confirmées.
-  En mode rapport, elles restent visibles sans blocage.
-- Pour **jscpd**, l'analyse privilégie les blocs **exactement identiques**,
-  d'au moins 10 lignes et 100 tokens (`--mode strict`). Les copies
-  intentionnelles, modèles générés et code répétitif légitime restent
-  possibles ; elles ne sont jamais appelées automatiquement « défauts ».
-  Radon et Lizard mesurent des indices de complexité, **pas des bugs**.
+Pour examiner une alerte en détail :
 
-Pour transformer une détection en vulnérabilité confirmée, il faut reproduire
-le comportement ou vérifier le chemin d'exploitation, le contexte, la version
-affectée et l'impact. Les vulnérabilités de dépendances ne sont pas
-nécessairement atteignables. Un rapport sans signalements ne prouve pas
-que tous les fichiers, dépendances et chemins d'exécution ont été examinés.
+1. Sur la page de l'exécution, descendez jusqu'à **Artifacts**.
+2. Téléchargez l'archive du scanner concerné : `security-semgrep-*`, `security-trivy-*`, `security-gitleaks-*` ou `security-zizmor-*`.
+3. Ouvrez le fichier **`semgrep.md`**, **`trivy.md`**, **`gitleaks.md`** ou **`zizmor.md`**. Il donne les détails disponibles (gravité, fichier, emplacement, explication). Le `*.sarif` sert au diagnostic technique.
+4. Ouvrez le fichier concerné, vérifiez le contexte et décidez si l'alerte est réelle, à approfondir ou un faux positif. **N'appliquez pas aveuglément une correction.**
 
-Les rapports Markdown distinguent désormais les alertes à vérifier, les
-exclusions acceptées et les autres entrées SARIF. L'artifact SARIF brut
-reste disponible pour la traçabilité.
+Les archives `maintainability-*` contiennent notamment `maintainability.md` pour les duplications et la complexité. Les artifacts sont conservés **7 jours**. Consultez aussi l'[exemple de lecture d'un rapport](docs/EXAMPLE-REPORT.md).
 
-## Cibles Trivy et dépendances du moteur
+### Que veut dire le statut affiché ?
 
-L'analyse Trivy du dépôt appelant produit **deux rapports complémentaires** :
-le SARIF des signalements et un inventaire JSON `trivy-targets.json`. Un
-inventaire JSON contenant zéro cible est affiché comme
-**« AUCUNE CIBLE RECONNUE : couverture non établie »**, et non comme une
-preuve que les dépendances ne contiennent aucune vulnérabilité. Une erreur
-d'inventaire bloque toujours le job. Les résultats restent filtrés aux niveaux
-HIGH/CRITICAL du scanner ; la présence d'une CVE n'est pas une exploitation
-confirmée.
+| Situation | Interprétation et action |
+| --- | --- |
+| **Vert, aucune alerte** | Pas d'alerte remontée **dans le périmètre réellement analysé** ; vérifiez la couverture. |
+| **Vert, avec des alertes** | Normal avec `enforce: false` : ouvrez les rapports et vérifiez les signalements. |
+| **« AUCUNE CIBLE RECONNUE » / `MANIFEST_ONLY`** | Le scanner n'a pas prouvé qu'il avait couvert les dépendances de cette stack : contrôlez les manifests et verrous. |
+| **Rouge : alerte** | Avec `enforce: true`, une alerte active peut faire échouer le job. Vérifiez sa pertinence. |
+| **Rouge : erreur technique** | Un scanner, son inventaire ou son rapport n'a pas pu être validé. **Ce n'est pas une vulnérabilité prouvée**, et l'échec ne doit pas être ignoré. |
+| **Rouge : tests du projet** | La commande de tests manque, ne fonctionne pas ou les tests échouent. Corrigez la commande ou le projet, pas le contrôle d'audit. |
 
-Pour le moteur `security-ci` lui-même, le workflow
-`.github/workflows/engine-dependencies.yml` résout dans un environnement de
-CI isolé les versions des outils Python (Semgrep, zizmor, Radon, Lizard,
-defusedxml), des dépendances npm de jscpd et du module Go de Gitleaks. Il
-génère les manifests `requirements.txt`, `package-lock.json` et `go.mod`,
-puis les soumet à Trivy. Il vérifie qu'au moins une cible a réellement été
-reconnue et **indique les familles non couvertes**. Les avis CVE restent
-informatifs jusqu'à revue humaine ; les erreurs techniques, inventaires
-absents et scans sans cibles échouent.
+**Important pour Trivy :** il ne suffit pas qu'un fichier `package.json`, `Cargo.toml` ou un manifeste de build existe pour considérer ses dépendances auditées. Regardez `stack-coverage.json` et `trivy-targets.json` dans l'archive Trivy. Un manque de couverture n'est pas « zéro faille ».
 
-Les dépendances Python et Go du moteur sont désormais **verrouillées avant
-installation** : le fichier `locks/python-tools.txt` impose 75 versions
-transitives avec SHA-256, via `pip --require-hashes --only-binary=:all:` (aucune installation de code source non verrouillé), et
-`locks/gitleaks/go.mod` et `go.sum` figent les versions et contrôlent les
-archives Go avec `GOSUMDB=sum.golang.org`, `go mod verify` et
-`go build -mod=readonly`. Les jobs du workflow réutilisable utilisent des
-copies épinglées par SHA de ces verrous centraux, jamais une version flottante.
-Les sous-ensembles Python pour la maintenabilité, les tests et zizmor sont
-vérifiés contre le verrou central par tests de régression.
+## 4. Problèmes fréquents
 
-**Limites :** cette vérification protège les téléchargements Python/Go du
-moteur, mais pas la totalité des actions, des règles Semgrep distantes ou des
-dépendances du projet appelant. Le lock npm `jscpd` et les règles Semgrep sont désormais vérifiés comme
-expliqué ci-dessous ; les bases CVE Trivy continuent d'évoluer. Un résultat sans vulnérabilité n'est jamais une
-garantie de sécurité.
+**« Tests du projet : NON VALIDÉS »**  
+Renseignez `test_command` avec la commande réellement utilisée par votre dépôt. Si la commande a besoin de dépendances, installez-les explicitement dedans. Regardez le log du job de tests.
 
-## Verrous Semgrep et npm, et validation des workflows
+**Semgrep échoue alors que je n'ai rien changé**  
+Le registre des règles peut renvoyer un format ou une version **différente de celle approuvée**. Par sécurité, Security CI refuse ces règles et échoue, y compris en mode non bloquant. Consultez le log du job et, s'il existe, `semgrep-registry-drift.json` dans l'archive Semgrep. Une relance peut parfois réussir mais **ne résout pas l'instabilité du fournisseur** ; voir [incident #29](https://github.com/loic31000/security-ci/issues/29).
 
-**Règles Semgrep approuvées :** le job télécharge le profil public
-`p/security-audit` depuis `https://semgrep.dev/c/p/security-audit`,
-puis vérifie son empreinte **SHA-256 exacte** et ses **225 identifiants de
-règles distincts** avant de l'utiliser. La référence approuvée est enregistrée
-dans `locks/semgrep-security-audit.json` et vérifiée par
-`scripts/verify_semgrep_bundle.py`. Le scan du dépôt et son contrôle positif
-utilisent **le même fichier YAML validé**. Le nombre de règles réellement
-exécutées dépend des langages et cibles du dépôt et ne doit pas être confondu
-avec 225.
+**Trivy ne reconnaît aucune dépendance**  
+Vérifiez la présence de manifests/verrous exploitables et l'inventaire `stack-coverage.json`. L'absence de cible reconnue ne certifie pas que les dépendances sont sûres.
 
-Lorsqu'un fournisseur modifie sa configuration, l'audit signale une
-**dérive de configuration** et s'arrête avant l'analyse Semgrep ; cela
-ne prouve **aucune vulnérabilité**. Après revue des différences de règles et
-validation des contrôles positifs, mettre à jour l'empreinte dans une PR
-séparée. Les règles ne sont pas recopiées dans le dépôt : un accès réseau au
-registre reste nécessaire.
+**Une alerte me semble incorrecte**  
+Examinez la règle, le fichier et le contexte. Les résultats automatiques peuvent être des faux positifs ; documentez la justification d'une éventuelle exclusion.
 
-Si le registre Semgrep ne renvoie pas les règles approuvées,
-le job effectue au maximum **trois tentatives**, puis **échoue clairement** :
-aucune règle non vérifiée n'est exécutée. Cela indique un problème
-d'intégrité ou de disponibilité du fournisseur, **pas une vulnérabilité
-prouvée de votre code**. Consultez le rapport `semgrep-registry-drift.json`
-pour connaître le format et l'empreinte reçus, sans exposer les règles.
-L'[incident #29](https://github.com/loic31000/security-ci/issues/29)
-suit ce problème. Les diagnostics avancés ont été retirés du chemin normal
-pour simplifier et accélérer l'audit.
+**J'ai un échec de permission ou le workflow ne démarre pas**  
+Vérifiez que GitHub Actions est autorisé dans le dépôt, que le fichier est bien dans `.github/workflows/` et que la référence après `@` est un SHA complet. Le workflow réutilisable doit être accessible depuis le dépôt appelant.
 
-**jscpd npm :** `locks/jscpd/package-lock.json` reproduit exactement
-l'inventaire de dépendances npm approuvé et audité dans le SBOM. Le script
-`scripts/install_jscpd.sh` vérifie l'empreinte SHA-256 du lock,
-les versions `5.4.1`, les origines sur le registre npm et l'intégrité
-SHA-512 des archives, puis lance **`npm ci --ignore-scripts`** dans un dossier
-temporaire. Les deux contrôles jscpd (dépôt et duplication synthétique)
-emploient ce même binaire, et l'inventaire moteur utilise le même lock. Un
-téléchargement via `npx --yes` n'est plus effectué.
+## 5. Personnaliser après le premier essai
 
-**actionlint :** un job distinct vérifie les fichiers
-`.github/workflows/*.yml` de `security-ci` à l'aide de
-`actionlint 1.7.12`, dont l'archive de publication Linux est validée
-par SHA-256. Il vérifie aussi qu'un workflow volontairement invalide est
-rejeté. Les problèmes de syntaxe et d'expressions sont des problèmes
-d'intégration CI, pas des vulnérabilités confirmées. Ce job ne s'applique
-qu'au dépôt central.
-
-## Contrôles négatifs et préparation à une version stable
-
-En plus des exemples synthétiques détectables, le moteur teste désormais
-quatre exemples **légitimes** qui ne doivent pas déclencher d'alerte :
-une fonction Python normale (Semgrep), un texte de documentation sans clé
-(Gitleaks), un workflow GitHub Actions à permissions minimales (zizmor),
-et deux fonctions distinctes (jscpd). Ces tests sont exécutés sur runners
-éphémères, avec les mêmes versions/configurations que l'analyse principale.
-Ils vérifient des cas concrets, **pas une absence globale de faux positifs**.
-
-Le document [Préparation de la version stable](docs/release-readiness.md)
-énonce les preuves nécessaires pour envisager une première release :
-contrôles GitHub réussis, tests JUnit réels, contrôles positifs et négatifs,
-couverture des dépendances et **essai sur local-agents dans une branche qui
-ne sera jamais fusionnée**. Le script `scripts/release_readiness.py`
-vérifie la complétude des preuves, mais ne crée aucun tag ni aucune release.
-
-## Calibration de la précision sur fixtures étiquetées
-
-Semgrep, Gitleaks et zizmor vérifient désormais, en plus de leurs contrôles
-historiques, une paire positive/négative avec le **vrai rapport SARIF**. Deux paires de fixtures distinctes
-par scanner sont désormais évaluées, avec un bilan de quatre résultats attendus
-(TP=2, TN=2, FP=0, FN=0 sur ces seuls exemples). Le
-validateur `scripts/scanner_precision.py` exige une alerte active sur le
-**bon fichier**, aucune alerte sur la fixture bénigne, et refuse les erreurs
-d'analyse, les suppressions acceptées comme preuve positive, ainsi que les
-rapports incomplets. Chaque job conserve un fichier `precision-<scanner>.json`
-dans ses artifacts, sans code source, messages ni valeurs de secrets. Il
-archive aussi un résumé agrégé `precision-<scanner>-summary.json`. L'identité
-du vrai scanner SARIF et les statuts de suppression sont vérifiés.
-
-Les compteurs TP/TN/FP/FN sont mesurés **par fixture synthétique** ; ils ne
-décrivent pas la précision globale du moteur sur un projet réel. Une
-divergence entre le script exécuté et sa version testée bloque la CI.
-
-La [feuille de route multi-stacks](docs/stack-expansion-roadmap.md) ordonne
-les prochaines intégrations (Java/Kotlin, .NET, Rust, Ruby/PHP puis IaC),
-sans déclarer une couverture avant validation d'un inventaire réel et de
-fixtures adversariales. Le banc `local-agents` demeure isolé.
-
-## Couverture de dépendances par stack — preuve Trivy
-
-Le scanner Trivy fournit désormais `stack-coverage.json` dans ses artifacts,
-avec un tableau par écosystème et les nombres de manifests présents et
-effectivement reconnus : Go, Python requirements, npm, pnpm, Maven,
-Gradle verrouillé, Rust/Cargo, Ruby/Bundler et PHP/Composer.
-Un fichier présent sans cible Trivy du bon type est marqué
-`INCOMPLETE` et provoque **l'échec du contrôle**, jamais une conclusion
-« zéro vulnérabilité ». Les fichiers de build sans verrou (`build.gradle`,
-`Cargo.toml`, `package.json`) sont `MANIFEST_ONLY` plutôt que
-considérés scannés ; les indices .NET sont `UNVERIFIED` tant que la
-preuve NuGet n'a pas été calibrée.
-
-Il s'agit de l'inventaire des **cibles reconnues**, pas d'une preuve de
-couverture exhaustive du langage ni d'exploitabilité. Les artifacts ne
-reproduisent pas le contenu des manifests ni les chemins des projets.
-
-## Contrôles positifs et couverture des dépendances
-
-L'audit ne se contente plus de vérifier qu'un scanner termine sans erreur :
-les jobs vérifient également que des **exemples délibérément détectables**
-déclenchent bien les outils. Sur des fichiers **synthétiques générés uniquement
-dans `RUNNER_TEMP`**, sans secret réel ni modification d'un dépôt appelant :
-
-- Semgrep analyse un `eval` non fiable et doit produire une détection.
-- Gitleaks doit retrouver un **faux jeton de démonstration** qui respecte la
-  syntaxe d'une règle connue (les valeurs ne sont pas publiées dans les artifacts).
-- zizmor analyse un workflow volontairement insuffisamment épinglé et doté
-  de permissions trop larges ; la collection YAML invalide est rejetée.
-- Trivy examine une ancienne dépendance Django fictive et doit détecter
-  au moins un avis de vulnérabilité connu.
-- jscpd doit retrouver deux fonctions **identiques sur plus de 30 lignes**.
-
-Ces tests prouvent seulement que la chaîne de détection répond à ces
-échantillons : ils ne prouvent **ni** la couverture exhaustive d'un vrai projet
-**ni** l'absence de faux positifs. Un résultat « 0 détection » sur un
-dépôt réel doit toujours être interprété avec l'inventaire des cibles
-analysées.
-
-L'audit de dépendances moteur **échoue** désormais si Trivy ne reconnaît
-pas chacune des trois familles prévues (`requirements.txt`,
-`package-lock.json` et `go.mod`) ; un inventaire partiel ne constitue
-jamais un rapport propre. jscpd utilise la version **5.4.1**, dont le
-moteur est écrit en Rust, afin d'éviter les dépendances JavaScript
-historiques de la branche v4. Le binaire Gitleaks conserve sa version
-fonctionnelle `v8.30.1` ; ses bibliothèques Go transitives
-`golang.org/x/crypto` et `golang.org/x/text` sont alignées respectivement
-sur `v0.55.0` et `v0.41.0` et compilées sur un module temporaire isolé.
-Toute évolution de versions doit repasser les contrôles de détection.
-
-Les avis de vulnérabilité restant éventuellement présents sont
-**des candidats à examiner humainement**. Aucune alerte ne doit être
-ignorée pour rendre un compteur artificiellement vert.
-
-## Inventaire CycloneDX et détection de dérive
-
-Le job `Engine dependency audit` conserve maintenant dans son artifact :
-
-- `engine.cdx.json` : **SBOM CycloneDX** des dépendances reconnues.
-- `engine-provenance.json` : empreintes SHA-256 des quatre manifests
-  (`requirements.txt`, `package-lock.json`, `go.mod`, `go.sum`),
-  référence Git validée et empreinte du SBOM.
-- Les quatre manifests et le rapport Trivy brut, pour vérifier les preuves.
-
-Les empreintes approuvées se trouvent dans
-`locks/engine-manifest-sha256.json`, issues d'une exécution réussie de la
-chaîne. Si l'un des manifests change au cours de la résolution, le contrôle
-échoue : **une mise à jour transitive ne passe plus silencieusement**.
-
-Ce mécanisme est volontairement strict. Lorsqu'une dépendance doit évoluer,
-examiner les CVE, reproduire les tests des scanners, puis mettre à jour les
-empreintes de référence dans une PR dédiée. Un échec de dérive peut indiquer
-une **mise à jour légitime**, pas une faille ; il demande une revue.
-
-**Limites :** les téléchargements Python et Go sont désormais vérifiés par
-leurs hachages avant installation, puis les quatre manifests sont contrôlés
-après résolution. Le SBOM n'est pas une attestation signée et une nomenclature
-CycloneDX non vide n'est pas une garantie de couverture exhaustive. Les
-règles Semgrep et les téléchargements npm sont maintenant vérifiés par
-empreintes et hashes ; les actions sont épinglées par SHA, et le job vérifie
-séparément les trois familles Trivy.
-
-## Rapports de sécurité lisibles pour les développeurs
-
-Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
-également un **rapport Markdown** téléchargeable dans le même artifact
-`security-<scanner>-<run_id>-<tentative>` :
-
-- `semgrep.md` : règle, gravité, fichier, ligne, explication et lien GitHub.
-- `trivy.md` : vulnérabilité ou erreur de configuration, gravité, emplacement et explication.
-- `gitleaks.md` : emplacement d'un secret potentiel, sans reproduire les valeurs sensibles.
-- `zizmor.md` : risque dans un workflow GitHub Actions, avec chemin, ligne et explication.
-
-Ouvrir **Actions → exécution → Artifacts**, télécharger l'archive du
-scanner puis ouvrir le fichier `.md` pour lire les résultats.
-Si le scanner ne fournit ni ligne ni emplacement, le rapport l'indique
-plutôt que de les inventer. Les signalements doivent être confirmés
-avant correction. Un rapport Markdown n'est pas un audit manuel.
-
-## Utilisation
-
-Le fichier `.github/workflows/security-audit.yml` peut être appelé depuis
-un autre dépôt. Il analyse le dépôt appelant, pas uniquement `security-ci`.
-
-Le **démarrage rapide ci-dessus** donne un exemple fonctionnel pour
-un projet Go. Pour les autres projets, adaptez `test_command` et choisissez
-une révision validée. Les déclencheurs `push` ou `schedule` restent
-facultatifs : ne les activez qu'après accord dans chaque dépôt.
-Aucun dépôt appelant n'est configuré automatiquement.
-
-## Modes et résultats
-
-- `enforce: false` : les alertes sont rapportées sans faire échouer le contrôle.
-- `enforce: true` : toute alerte retenue fait échouer le contrôle correspondant.
-- Les erreurs techniques et rapports absents/incomplets font échouer le contrôle
-  dans les deux modes. Une exécution verte en mode rapport peut contenir des alertes.
-- Résumés : **Actions → exécution → Summary**.
-- Rapports détaillés : artifacts `security-*` (SARIF) et `maintainability-*` (JSON), conservés 7 jours.
-- Pas de publication automatique dans **Security → Code scanning** ni de
-  commentaire sur les PR.
-
-Un audit **hebdomadaire** est également programmé chaque lundi (04 h 17 UTC)
-sur la branche par défaut, ainsi qu'un audit des dépendances du moteur
-(05 h 23 UTC). Les exécutions planifiées ne déclenchent aucun
-déploiement vers un autre dépôt. ShellCheck vérifie les scripts Bash
-de `security-ci` et échoue sur les avertissements de qualité.
-
-Dans `security-ci`, les push sur `main` et les PR déclenchent un audit du dépôt
-central. Un lancement manuel est également disponible dans Actions, avec le choix
-du mode. Les autres dépôts nécessitent leur propre workflow appelant.
-
-Les protections de branches se configurent séparément : un contrôle en échec
-ne bloque pas automatiquement la fusion. Le mode strict concerne les alertes
-présentes, pas uniquement les nouvelles alertes introduites par une PR.
-
-
-## Qualité multi-langage et tests opt-in
-
-Le job maintainability produit maintenant un fichier `lizard.xml` pour la complexité
-multi-langage, en complément des rapports jscpd et Radon. Ces mesures sont
-informatives et ne constituent pas une estimation financière de dette technique.
-
-Un dépôt appelant doit configurer les tests en passant une commande adaptée à sa
-stack. La commande s'exécute **dans le dépôt appelant**, sans secrets hérités :
-ne l'activez que pour un projet de confiance, après revue de ses scripts.
+Commencez en **mode rapport** (`enforce: false`), puis activez les blocages **après avoir examiné les alertes** :
 
 ```yaml
-jobs:
-  security:
-    uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
-    permissions:
-      contents: read
-    with:
-      enforce: false
-      test_command: 'npm ci && npm run test -- --coverage'
-      coverage_paths: |
-        coverage/
+with:
+  enforce: true
+  test_command: 'go test ./...'
 ```
 
-Autres exemples à adapter après inspection du projet :
-Python `python -m pip install -r requirements.txt && python -m pytest --cov=. --cov-report=xml`;
-Go `go test ./... -coverprofile=coverage.out`.
-La CI ne devine pas les commandes de test et ne prétend pas mesurer une
-couverture si aucun rapport n'est généré. **Sans `test_command`, le job échoue**
-dans un dépôt appelant pour éviter une validation trompeuse ; les tests échoués
-font aussi échouer le job. Seul `security-ci` lui-même exécute ses tests
-unitaires intégrés lorsque la commande n'est pas fournie.
+- **`enforce: false`** : les alertes sont affichées, mais ne font pas à elles seules échouer les jobs de scan.
+- **`enforce: true`** : les alertes actives bloquent le job concerné. Cela ne configure **pas** automatiquement la protection des branches.
+- **Dans les deux cas** : les erreurs techniques, inventaires invalides et tests échoués restent bloquants.
 
-### Mode de certification stricte par rapport de tests JUnit
-
-Les dépôts appelants peuvent activer la vérification d'un **rapport JUnit XML**
-en complément de la commande de tests. Ce mode ne change pas les projets
-existants : il est volontairement **opt-in**.
+Pour vérifier aussi un **rapport de tests JUnit XML réellement produit** :
 
 ```yaml
-jobs:
-  security:
-    uses: loic31000/security-ci/.github/workflows/security-audit.yml@REMPLACER_PAR_SHA_COMMIT
-    permissions:
-      contents: read
-    with:
-      test_command: 'python -m pip install pytest && python -m pytest tests -q --junitxml=reports/junit.xml'
-      require_test_report: true
-      test_report_path: 'reports/junit.xml'
+with:
+  enforce: false
+  test_command: 'python -m pip install -r requirements.txt && python -m pytest --junitxml=reports/junit.xml'
+  require_test_report: true
+  test_report_path: 'reports/junit.xml'
 ```
 
-La certification échoue si le fichier est absent, situé hors du dépôt,
-ancien (non réécrit pendant ce job), trop volumineux, invalide, ou contient
-zéro `testcase`, un échec, une erreur ou un test ignoré. Son parseur XML
-utilise `defusedxml`. **Ce contrôle atteste la présence d'un rapport
-structuré cohérent ; il ne peut pas empêcher un script malveillant de
-fabriquer un faux rapport.** N'activer la commande que sur du code de
-confiance. Le chemin est relatif à la racine du dépôt appelant.
+Adaptez les dépendances et le chemin à votre projet. Le rapport doit être **nouveau, valide et contenir au moins un vrai test réussi**. Vous pouvez aussi fournir `coverage_paths` pour archiver des rapports de couverture produits par vos tests. Security CI ne génère pas automatiquement la couverture d'un langage.
 
-## Lire les rapports de maintenabilité, tests et couverture
+## 6. Aller plus loin
 
-En plus des quatre scanners de sécurité, le résumé GitHub Actions explique :
+- [Référence technique et maintenance](docs/technical-reference.md) — formats SARIF, règles, dépendances verrouillées, preuves des scanners, options avancées et limites.
+- [Exemple commenté de rapport](docs/EXAMPLE-REPORT.md) — vérifier une alerte sans confondre détection et vulnérabilité confirmée.
+- [Critères de préparation d'une version stable](docs/release-readiness.md) — la version `v1.0.0` **n'est pas publiée**.
+- [Feuille de route](docs/stack-expansion-roadmap.md) — **nouvelles fonctionnalités gelées** ; priorité à la simplicité et à la stabilité.
+- [Contribuer](CONTRIBUTING.md) · [Signaler une faille de sécurité](SECURITY.md) · [Licence MIT](LICENSE).
 
-| Mesure | Description simple | Interprétation |
-|---|---|---|
-| **jscpd** | Blocs exactement identiques de 10 lignes et 100 tokens au moins. | Un bloc répété peut être intentionnel et n'est pas automatiquement un défaut. |
-| **Radon (Python)** | Fonctions avec une complexité cyclomatique d'au moins 11 et fichiers dont l'indice de maintenabilité est inférieur à 20. | Indicateurs à examiner, sans blocage de sécurité. |
-| **Lizard** | Complexité sur plusieurs langages ; valeurs d'au moins 15 signalées. | Aide à identifier le code difficile à suivre ou tester. |
-| **Tests du projet** | Affiche si la commande de tests du projet a réussi ou échoué. | Commande obligatoire pour un dépôt appelant ; son absence fait échouer le job. |
-| **Couverture optionnelle** | Lit le pourcentage de lignes depuis `coverage.xml` au format Cobertura quand il est présent à la racine. | Un rapport manquant affiche « non disponible » et non « 0 % ». |
-
-Les données complètes sont conservées 7 jours dans les artifacts
-`maintainability-*` (JSON et XML) et, si configuré, `coverage-*`.
-Le taux indiqué ne porte que sur les fichiers et tests présents dans le rapport.
-Les seuils de complexité sont informatifs et **ne bloquent pas** les fusions.
-Ce résumé n'installe pas d'outil de tests propre à une stack : la commande vient
-exclusivement du dépôt appelant.
-
-## Rapport de maintenabilité lisible
-
-L'artifact `maintainability-*` contient maintenant `maintainability.md`,
-en plus de `jscpd-report.json`, des fichiers Radon JSON et de `lizard.xml`.
-Le Markdown récapitule les duplications, les fichiers et lignes des blocs
-identifiés lorsque ces informations existent, les fonctions Python complexes,
-les faibles indices de maintenabilité et les mesures Lizard.
-Les détails complets restent dans les fichiers originaux.
-
-Les générateurs Markdown sont testés automatiquement sur les Pull Requests
-et sur `main` par `.github/workflows/report-tests.yml`. Les tests couvrent
-notamment la localisation, la protection des valeurs sensibles Gitleaks,
-les chemins malveillants, les rapports vides et les métriques de maintenance.
-
-## Déploiement
-
-Le script `scripts/rollout.sh` prépare des Pull Requests **en brouillon**, sans
-modifier directement les branches principales. Chaque dépôt doit disposer d'une
-**commande de tests réelle**, déclarée volontairement dans un fichier JSON local :
-
-```json
-{
-  "loic31000/mon-projet": "npm ci && npm test"
-}
-```
-
-Pour simuler, puis proposer des PR uniquement sur les dépôts configurés :
-
-```bash
-./scripts/rollout.sh SHA_COMPLET_DU_WORKFLOW '' test-commands.json
-./scripts/rollout.sh SHA_COMPLET_DU_WORKFLOW --apply test-commands.json
-```
-
-Remplacer le marqueur par le SHA Git complet **validé** du workflow central.
-Sans commande pour un dépôt, celui-ci est **ignoré** ; `--apply` refuse de
-fonctionner sans fichier de configuration. Les commandes doivent tenir sur une
-ligne et être examinées avant utilisation. Ne jamais inclure de secret dans ce
-fichier, ni fusionner les PR sans vérifier leur CI. Une simulation ne modifie rien.
-Le script n'installe pas de dépendances inconnues et ne fusionne aucune PR.
-
-## Participer et signaler un problème
-
-- [Guide de contribution](CONTRIBUTING.md) : règles des Pull Requests et tests.
-- [Politique de signalement de sécurité](SECURITY.md) : évitez de publier des secrets.
-- [Exemple de lecture d'un rapport](docs/EXAMPLE-REPORT.md).
-
-## Préparation de la première version
-
-Le projet est distribué sous **licence MIT** (voir [LICENSE](LICENSE)).
-La première version stable `v1.0.0` n'a pas encore été publiée.
-
-Une fois les tests vérifiés, documenter les changements
-dans les notes de version, créer un tag sur un commit validé, puis publier la
-release GitHub. Ne pas taguer une version stable avant ces étapes.
-
-## Limites et maintenance
-
-Les runners standards GitHub sont gratuits pour les dépôts publics ; les dépôts
-privés consomment le quota de leur propriétaire. Un workflow central public ne
-rend pas gratuites les exécutions appelées depuis des dépôts privés. Le stockage
-des artifacts a ses propres limites.
-
-Les actions sont figées par SHA et les scanners par version. Go utilise la
-révision corrective disponible dans la branche 1.25. Les téléchargements
-Python sont vérifiés par SHA-256 (`--require-hashes`), et les modules Go par
-`go.sum`, la base de sommes Go et `-mod=readonly`. Les sous-ensembles
-de paquets des jobs GitHub Actions sont issus du verrou central. Les règles
-Semgrep téléchargées et les bases CVE Trivy évoluent : les résultats ne sont
-pas parfaitement reproductibles.
-
-L'analyse de sécurité ne lance pas les scripts d'installation. Le job de tests exécute uniquement la commande explicitement fournie par le dépôt appelant. Trivy
-analyse les manifests/lockfiles qu'il prend en charge : un résultat sans alerte
-ne prouve pas que toutes les dépendances ont été couvertes. Les fichiers ignorés,
-les configurations des scanners et les exclusions du dépôt affectent le périmètre.
-Les alertes et leurs corrections doivent être examinées avant d'activer le mode strict.
-
-Gitleaks masque les secrets dans ses résultats ; les autres rapports peuvent contenir
-des extraits de code. zizmor fonctionne hors ligne : les contrôles nécessitant
-l'API GitHub ne sont pas exécutés. Aucun scanner ne garantit l'absence de faille.
-
-Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. Lizard mesure la complexité de plusieurs langages, et un job de tests configurable est disponible. La couverture exige une configuration propre à chaque projet ; SonarQube et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
-validées régulièrement dans ce dépôt central.
+**Limites à connaître :** l'outil n'est pas un audit humain, n'assure ni 100 % de détection ni zéro faux positif. Il n'envoie pas automatiquement de résultats dans GitHub Code scanning et ne commente pas les PR. Les runners GitHub et les artifacts peuvent générer des coûts ou consommer des quotas, notamment dans les dépôts privés.
