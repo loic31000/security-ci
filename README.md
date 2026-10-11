@@ -9,7 +9,7 @@ les secrets, l'infrastructure déclarative et les workflows GitHub Actions.
 | SCA / IaC | Trivy | HIGH et CRITICAL |
 | Secrets | Gitleaks CLI | Historique Git accessible, secrets masqués |
 | GitHub Actions | zizmor | MEDIUM et HIGH, analyse hors ligne |
-| Maintenabilité | jscpd + Radon | Duplications multi-langage ; complexité et maintenabilité Python |
+| Maintenabilité | jscpd + Radon + Lizard | Copies exactes suffisamment longues ; complexité Python et multi-langage |
 
 ## Lire les descriptions des audits
 
@@ -20,9 +20,41 @@ Chaque contrôle de sécurité affiche maintenant une phrase simple dans le rés
 - **Gitleaks** : recherche des secrets potentiels dans l'historique Git, sans afficher leur valeur.
 - **zizmor** : inspecte les workflows GitHub Actions et signale des pratiques risquées.
 
-Le reste de l'affichage et les règles de décision sont inchangés. Une alerte
-n'est pas nécessairement une faille confirmée ; le mode rapport ne la bloque pas,
-le mode strict la bloque. Les artifacts SARIF apportent les détails.
+## Fiabilité des résultats et faux positifs
+
+**Un outil automatique ne peut pas garantir zéro faux positif, ni détecter
+100 % des vulnérabilités.** Les résultats affichés sont des **détections à
+confirmer**, jamais des « failles prouvées » sans vérification humaine.
+
+- Les rapports SARIF sont contrôlés avant toute conclusion : version 2.1.0,
+  analyse réussie, identité du scanner, liste de résultats présente et
+  structure cohérente. Les erreurs techniques sont **bloquantes**, même en mode rapport.
+- Le compteur d'alertes actives ne retient que les résultats SARIF de type
+  `fail` et de niveau `warning` ou `error`. Les résultats `pass`,
+  `review`, `open`, `informational`, `note` et `none` sont identifiés
+  séparément comme **non bloquants**, sans les appeler « vulnérabilités ».
+- Une suppression SARIF explicitement **acceptée** est exclue des alertes
+  actives, mais reste traçable dans l'artifact. Une suppression en cours
+  d'examen ou rejetée reste active. Une suppression ne démontre pas que
+  le code est sécurisé : elle doit être justifiée et revue.
+- En mode `enforce: true`, ce sont les **alertes actives du scanner** qui
+  bloquent la CI, pas nécessairement des failles exploitables confirmées.
+  En mode rapport, elles restent visibles sans blocage.
+- Pour **jscpd**, l'analyse privilégie les blocs **exactement identiques**,
+  d'au moins 10 lignes et 100 tokens (`--mode strict`). Les copies
+  intentionnelles, modèles générés et code répétitif légitime restent
+  possibles ; elles ne sont jamais appelées automatiquement « défauts ».
+  Radon et Lizard mesurent des indices de complexité, **pas des bugs**.
+
+Pour transformer une détection en vulnérabilité confirmée, il faut reproduire
+le comportement ou vérifier le chemin d'exploitation, le contexte, la version
+affectée et l'impact. Les vulnérabilités de dépendances ne sont pas
+nécessairement atteignables. Un rapport sans signalements ne prouve pas
+que tous les fichiers, dépendances et chemins d'exécution ont été examinés.
+
+Les rapports Markdown distinguent désormais les alertes à vérifier, les
+exclusions acceptées et les autres entrées SARIF. L'artifact SARIF brut
+reste disponible pour la traçabilité.
 
 ## Rapports de sécurité lisibles pour les développeurs
 
@@ -130,7 +162,7 @@ En plus des quatre scanners de sécurité, le résumé GitHub Actions explique :
 
 | Mesure | Description simple | Interprétation |
 |---|---|---|
-| **jscpd** | Nombre de blocs de code identiques ou proches. | Une duplication peut compliquer les modifications ; ce n'est pas automatiquement un défaut. |
+| **jscpd** | Blocs exactement identiques de 10 lignes et 100 tokens au moins. | Un bloc répété peut être intentionnel et n'est pas automatiquement un défaut. |
 | **Radon (Python)** | Fonctions avec une complexité cyclomatique d'au moins 11 et fichiers dont l'indice de maintenabilité est inférieur à 20. | Indicateurs à examiner, sans blocage de sécurité. |
 | **Lizard** | Complexité sur plusieurs langages ; valeurs d'au moins 15 signalées. | Aide à identifier le code difficile à suivre ou tester. |
 | **Tests du projet** | Affiche si la commande de tests du projet a réussi ou échoué. | Commande obligatoire pour un dépôt appelant ; son absence fait échouer le job. |

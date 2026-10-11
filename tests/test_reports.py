@@ -59,11 +59,48 @@ class ReportsTest(unittest.TestCase):
                 "src/x.py": [{"name": "complex", "lineno": 8, "complexity": 15}]}))
             (root / "python-maintainability.json").write_text(json.dumps({
                 "src/x.py": {"mi": 12.2}}))
-            (root / "lizard.xml").write_text("<root><measure type='Function'><value value='17'/></measure></root>")
+            (root / "lizard.xml").write_text("<cppncss><measure type='Function'><labels><label>Nr.</label><label>NCSS</label><label>CCN</label></labels><item name='f'><value>1</value><value>20</value><value>17</value></item></measure></cppncss>")
             report = module.render(root)
             for needle in ("src/a.go", "12", "src/b.go", "42", "src/x.py", "complex", "15", "12.2"):
                 self.assertIn(needle, report)
 
+
+    def test_lizard_real_xml_schema_counts_ccn_not_ncss(self):
+        module = load("maintainability_to_markdown")
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "lizard.xml").write_text(
+                "<cppncss><measure type='Function'>"
+                "<labels><label>Nr.</label><label>NCSS</label><label>CCN</label></labels>"
+                "<item name='high'><value>1</value><value>10</value><value>17</value></item>"
+                "<item name='low'><value>2</value><value>40</value><value>4</value></item>"
+                "<average label='CCN' value='10.5'/>"
+                "</measure></cppncss>", encoding="utf-8"
+            )
+            self.assertEqual(module.lizard_complexity(root / "lizard.xml"), (1, 2))
+            self.assertIn("1 fonction(s) >= 15 sur 2", module.render(root))
+
+    def test_lizard_missing_ccn_is_technical_failure(self):
+        module = load("maintainability_to_markdown")
+        with tempfile.TemporaryDirectory() as d:
+            xml = Path(d) / "lizard.xml"
+            xml.write_text("<cppncss><measure type='Function'><item><value>12</value></item></measure></cppncss>")
+            with self.assertRaises(ValueError):
+                module.lizard_complexity(xml)
+
+    def test_sarif_suppressed_and_informational_not_labeled_confirmed(self):
+        module = load("sarif_to_markdown")
+        data = {"runs": [{"results": [
+            {"ruleId": "A", "level": "error", "suppressions": [{"status": "accepted"}]},
+            {"ruleId": "B", "kind": "pass"},
+            {"ruleId": "C", "level": "warning"}
+        ]}]}
+        markdown = module.render(data, "semgrep")
+        self.assertIn("Entrées SARIF brutes : 3", markdown)
+        self.assertIn("Exclu : suppression acceptée", markdown)
+        self.assertIn("Non bloquant", markdown)
+        self.assertIn("À vérifier", markdown)
+        self.assertNotIn("faille confirmée", markdown)
 
     def test_malicious_lizard_xml_entities_rejected(self):
         from defusedxml.common import DefusedXmlException

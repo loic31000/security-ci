@@ -33,6 +33,16 @@ def location_for(result, repo, sha):
     return "Emplacement non renseigné", None, ""
 
 
+def sarif_status(result, level):
+    """Avoid reporting accepted suppressions or non-failures as active findings."""
+    if result.get("kind", "fail") != "fail" or level in ("note", "none"):
+        return "Non bloquant (résultat informatif ou sans échec)"
+    if any(isinstance(x, dict) and x.get("status") == "accepted"
+           for x in (result.get("suppressions") or [])):
+        return "Exclu : suppression acceptée"
+    return "À vérifier : résultat automatique non confirmé"
+
+
 def render(data, scanner, repo="", sha=""):
     runs = data.get("runs")
     if not isinstance(runs, list) or not runs:
@@ -40,7 +50,7 @@ def render(data, scanner, repo="", sha=""):
     title = {"semgrep": "Analyse du code", "trivy": "Dépendances et configuration",
              "gitleaks": "Secrets potentiels", "zizmor": "Workflows GitHub Actions"}.get(scanner, scanner)
     lines = [f"# Rapport {scanner}", "", f"**Contrôle :** {title}.", "",
-             "Ces résultats sont des alertes à examiner, pas des vulnérabilités confirmées.",
+             "Les détections automatiques sont à vérifier, pas des vulnérabilités confirmées. Les suppressions acceptées et informations ne sont pas des alertes actives.",
              "Le rapport SARIF original reste disponible pour les outils.", ""]
     records = []
     for run in runs:
@@ -57,13 +67,14 @@ def render(data, scanner, repo="", sha=""):
             message = ("Secret potentiel détecté ; ouvrir le rapport SARIF (valeurs à traiter comme sensibles)."
                        if scanner == "gitleaks" else raw_message)
             uri, line, url = location_for(result, repo, sha)
-            records.append((rid, level, message, uri, line, url))
-    lines.extend([f"**Nombre de signalements : {len(records)}**", ""])
+            records.append((rid, level, message, uri, line, url, sarif_status(result, level)))
+    lines.extend([f"**Entrées SARIF brutes : {len(records)} (dont certaines peuvent être exclues ou informatives)**", ""])
     if not records:
         lines.extend(["Aucune alerte remontée dans le périmètre analysé.", ""])
-    for index, (rid, level, message, uri, line, url) in enumerate(records, 1):
+    for index, (rid, level, message, uri, line, url, status) in enumerate(records, 1):
         lines.extend([f"## {index}. {clean(rid, 180)}", "",
                       f"- **Gravité SARIF :** {clean(level, 80)}",
+                      f"- **Statut :** {status}",
                       f"- **Fichier :** `{clean(uri, 320)}`",
                       f"- **Ligne :** {line if line else 'non renseignée'}"])
         if url:
