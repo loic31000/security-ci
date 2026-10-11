@@ -220,5 +220,5 @@ Gitleaks masque les secrets dans ses résultats ; les autres rapports peuvent co
 des extraits de code. zizmor fonctionne hors ligne : les contrôles nécessitant
 l'API GitHub ne sont pas exécutés. Aucun scanner ne garantit l'absence de faille.
 
-Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. SonarQube, les fonctions de complexité des autres langages (Lizard) et un job de tests configurable sont disponibles. La couverture exige une configuration propre à chaque projet ; SonarQube et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
+Une première mesure de dette technique est intégrée avec jscpd (duplications multi-langage) et Radon (complexité et maintenabilité Python). Les métriques sont informatives, sans quality gate, et les fichiers JSON sont disponibles dans l'artifact `maintainability-*`. Lizard mesure la complexité de plusieurs langages, et un job de tests configurable est disponible. La couverture exige une configuration propre à chaque projet ; SonarQube et le DAST restent à intégrer. Les versions et règles doivent être mises à jour et
 validées régulièrement dans ce dépôt central.
