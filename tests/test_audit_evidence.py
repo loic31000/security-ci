@@ -83,6 +83,32 @@ class AuditEvidenceTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 audit.summarize(root, report)
 
+    def test_toolchain_partial_coverage_fails_closed(self):
+        audit = load("toolchain_audit")
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for name in audit.MANIFESTS:
+                file = root / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("generated")
+            report = root / "scan.json"
+            # Two actual targets, but three manifests on disk: no false 'clean'.
+            report.write_text(json.dumps({"SchemaVersion": 2, "Results": [
+                {"Target": "python/requirements.txt", "Vulnerabilities": []},
+                {"Target": "go/go.mod", "Vulnerabilities": []}
+            ]}))
+            with self.assertRaisesRegex(ValueError, "node/package-lock.json"):
+                audit.summarize(root, report)
+            # Substring matches must not be mistaken for audit coverage.
+            data = {"SchemaVersion": 2, "Results": [
+                {"Target": "archive/node/package-lock.json.backup", "Vulnerabilities": []},
+                {"Target": "python/requirements.txt", "Vulnerabilities": []},
+                {"Target": "go/go.mod", "Vulnerabilities": []}
+            ]}
+            report.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "node/package-lock.json"):
+                audit.summarize(root, report)
+
     def test_junit_requires_fresh_nonempty_passing_cases(self):
         v = load("test_report_validator")
         with tempfile.TemporaryDirectory() as d:
