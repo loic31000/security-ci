@@ -54,7 +54,9 @@ def _entries(data, scanner, repo, sha):
                 continue
             rid = str(result.get("ruleId") or "Règle non précisée")
             rule = by_id.get(rid, {})
-            level = result.get("level") or rule.get("defaultConfiguration", {}).get("level") or "non précisée"
+            # SARIF 2.1.0 default severity is "warning" when neither the
+            # result nor the rule declares a level. Match sarif_decision.py.
+            level = result.get("level") or rule.get("defaultConfiguration", {}).get("level") or "warning"
             raw = (result.get("message") or {}).get("text") or rule.get("shortDescription", {}).get("text") or ""
             message = ("Secret potentiel détecté ; ouvrir le rapport SARIF (valeurs à traiter comme sensibles)."
                        if scanner == "gitleaks" else raw)
