@@ -34,6 +34,31 @@ class RegistryDriftTest(unittest.TestCase):
         for value in ("p0", "p2", "DO_NOT_PUBLISH_RULE_CONTENT"):
             self.assertNotIn('"'+value+'"', json.dumps(data))
 
+    def test_json_registry_response_is_diagnosed_but_never_approved(self):
+        source = {
+            "rules": [
+                {"id": "p0", "message": "DO_NOT_EXPORT"},
+                {"id": "p1", "patterns": [{"pattern": "any"}]},
+            ],
+        }
+        data = subject.inspect_payload(json.dumps(source).encode(), self.lock)
+        self.assertEqual(data["status"], "UNAPPROVED")
+        self.assertEqual(data["response_format"], "json")
+        self.assertEqual(data["parsed_rule_count"], 2)
+        self.assertEqual(data["distinct_rule_count"], 2)
+        self.assertFalse(data["matches_approved_sha256"])
+        self.assertFalse(data["yaml_shape_recognized"])
+        self.assertNotIn("DO_NOT_EXPORT", json.dumps(data))
+        self.assertNotIn('"p0"', json.dumps(data))
+        self.assertNotIn('"p1"', json.dumps(data))
+
+    def test_invalid_json_and_duplicate_identifiers_never_approved(self):
+        for raw in (b'{"rules": [', b'{"rules": "not-list"}',
+                    b'{"rules":[{"id":"same"},{"id":"same"}]}'):
+            with self.subTest(raw=raw):
+                self.assertNotEqual(
+                    subject.inspect_payload(raw, self.lock)["status"], "APPROVED")
+
     def test_bad_count_duplicate_and_root_never_pass(self):
         for value in (self.raw.replace(b"- id: p1", b"- id: p0"),
                       b"error: opaque", self.raw + b"- id: p2\n"):
