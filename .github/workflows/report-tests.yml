@@ -30,70 +30,41 @@ jobs:
             --workspace "$GITHUB_WORKSPACE" --start-ns "$start_ns"
 
       # TEMPORARY bootstrap; removed before merge. Runs only on this trusted PR branch.
-      - name: Setup Go for one-time lock bootstrap
+      - name: Setup Go for reviewed checksums expansion
         if: github.event_name == 'pull_request' && github.head_ref == 'feat/preinstall-python-go-locks' && github.event.pull_request.head.repo.full_name == 'loic31000/security-ci'
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version: '1.25.x'
           cache: false
-      - name: Generate exact Python artifact hashes and Go locks on trusted runner
+      - name: Expand Go checksums without changing locked module versions
         if: github.event_name == 'pull_request' && github.head_ref == 'feat/preinstall-python-go-locks' && github.event.pull_request.head.repo.full_name == 'loic31000/security-ci'
         run: |
           set -euo pipefail
-          python -m venv "$RUNNER_TEMP/pinned-python"
-          "$RUNNER_TEMP/pinned-python/bin/python" -m pip install --disable-pip-version-check \
-            'semgrep==1.179.0' 'zizmor==1.30.1' 'radon==6.0.1' \
-            'lizard==1.17.10' 'defusedxml==0.7.1' 'pytest==8.4.2'
-          "$RUNNER_TEMP/pinned-python/bin/python" -m pip freeze > "$RUNNER_TEMP/python-requirements.txt"
-          "$RUNNER_TEMP/pinned-python/bin/python" -m pip download \
-            --disable-pip-version-check --no-deps --dest "$RUNNER_TEMP/python-dist" \
-            -r "$RUNNER_TEMP/python-requirements.txt"
-          bash scripts/build_gitleaks.sh "$RUNNER_TEMP/pinned-go" "$RUNNER_TEMP/pinned-bin"
-          "$RUNNER_TEMP/pinned-python/bin/python" - <<'PY'
+          mkdir -p "$RUNNER_TEMP/reviewed-go"
+          cp locks/gitleaks/go.mod locks/gitleaks/go.sum "$RUNNER_TEMP/reviewed-go/"
+          (
+            cd "$RUNNER_TEMP/reviewed-go"
+            GOTOOLCHAIN=local GOSUMDB=sum.golang.org GOPROXY=https://proxy.golang.org go mod download all
+            GOTOOLCHAIN=local go mod verify
+          )
+          cmp -s locks/gitleaks/go.mod "$RUNNER_TEMP/reviewed-go/go.mod"
+          python3 - <<'PY'
           import base64
           import hashlib
-          import json
           import os
           from pathlib import Path
-          from packaging.utils import canonicalize_name, parse_wheel_filename, parse_sdist_filename
-          tmp = Path(os.environ["RUNNER_TEMP"])
-          baseline = json.loads(Path("locks/engine-manifest-sha256.json").read_text())["files"]
-          names = {"python/requirements.txt": tmp/"python-requirements.txt",
-                   "go/go.mod": tmp/"pinned-go/go.mod", "go/go.sum": tmp/"pinned-go/go.sum"}
-          for name, path in names.items():
-              digest = hashlib.sha256(path.read_bytes()).hexdigest()
-              if digest != baseline[name]:
-                  raise SystemExit(f"Unexpected dependency drift in {name}: {digest} != {baseline[name]}")
-          archives = {}
-          for file in (tmp/"python-dist").iterdir():
-              if file.name.endswith(".whl"):
-                  name, version, _, _ = parse_wheel_filename(file.name)
-              else:
-                  name, version = parse_sdist_filename(file.name)
-              key = (canonicalize_name(name), str(version))
-              if key in archives:
-                  raise SystemExit(f"Multiple distributions for {key}")
-              archives[key] = hashlib.sha256(file.read_bytes()).hexdigest()
-          pinned = []
-          lines = (tmp/"python-requirements.txt").read_text().splitlines()
-          for line in lines:
-              if "==" not in line:
-                  raise SystemExit(f"Unpinned pip requirement: {line}")
-              name, version = line.split("==", 1)
-              key = (canonicalize_name(name), version)
-              if key not in archives:
-                  raise SystemExit(f"No downloaded archive for {key}")
-              pinned.append(f"{name}=={version} --hash=sha256:{archives[key]}")
-          output = "# Python 3.12 / Ubuntu 24.04, approved dependencies.\n"
-          output += "# Each pinned distribution SHA-256 is verified by pip --require-hashes.\n"
-          output += "\n".join(pinned)+"\n"
-          assets = {"locks/python-tools.txt": output.encode(),
-                    "locks/gitleaks/go.mod": (tmp/"pinned-go/go.mod").read_bytes(),
-                    "locks/gitleaks/go.sum": (tmp/"pinned-go/go.sum").read_bytes()}
-          for name, data in assets.items():
-              enc = base64.b64encode(data).decode("ascii")
-              chunks = [enc[i:i+1500] for i in range(0, len(enc), 1500)]
-              for i, chunk in enumerate(chunks):
-                  print(f"LOCKCHUNK|{name}|{i}|{len(chunks)}|{chunk}")
-              print(f"LOCKDIGEST|{name}|{hashlib.sha256(data).hexdigest()}|{len(data)}")
+          before = Path("locks/gitleaks/go.sum").read_text().splitlines()
+          after = (Path(os.environ["RUNNER_TEMP"]) / "reviewed-go/go.sum").read_text().splitlines()
+          if not set(before).issubset(set(after)) or len(set(after)) != len(after):
+              raise SystemExit("Go dependency checksums changed or duplicate entries appeared")
+          added = sorted(set(after) - set(before))
+          print(f"GOLOCK_EXTRA_CHECKSUMS={len(added)}")
+          for line in added:
+              print("GOLOCK_ADDED|" + line)
+          data = ("\n".join(after) + "\n").encode()
+          value = base64.b64encode(data).decode()
+          chunks = [value[i:i+1500] for i in range(0, len(value), 1500)]
+          for i, chunk in enumerate(chunks):
+              print(f"GOLOCK_CHUNK|{i}|{len(chunks)}|{chunk}")
+          print(f"GOLOCK_DIGEST|{hashlib.sha256(data).hexdigest()}|{len(data)}")
           PY
