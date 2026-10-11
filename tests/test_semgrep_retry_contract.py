@@ -19,7 +19,15 @@ class SemgrepRegistryRetryTest(unittest.TestCase):
         self.assertIn("if curl --fail --silent", part)
         self.assertIn("&&\n                python3 .audit-python-lock/scripts/verify_semgrep_bundle.py", part)
         self.assertIn(".audit-python-lock/locks/semgrep-security-audit.json", part)
-        self.assertRegex(part, r'if \[\[ "\$verified" != "true" \]\]; then\s+echo .*\s+exit 1')
+        # Diagnostic may be collected between the fail-closed branch and the
+        # error; the guard still requires an unconditional exit before using rules.
+        failure_start = part.index('if [[ "$verified" != "true" ]]; then')
+        failure_end = part.index('          fi', failure_start)
+        reject_branch = part[failure_start:failure_end]
+        self.assertIn('echo "::error::The reviewed Semgrep ruleset is unavailable.', reject_branch)
+        self.assertIn('exit 1', reject_branch)
+        self.assertIn('semgrep_drift_metadata.py', reject_branch)
+
         self.assertGreater(
             part.index('echo "SEMGREP_CONFIG_PATH='),
             part.index('if [[ "$verified" != "true" ]]'),
