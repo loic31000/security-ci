@@ -112,13 +112,15 @@ validation des contrôles positifs, mettre à jour l'empreinte dans une PR
 séparée. Les règles ne sont pas recopiées dans le dépôt : un accès réseau au
 registre reste nécessaire.
 
-En présence de réponses divergentes du registre (voir
-[incident #29](https://github.com/loic31000/security-ci/issues/29)),
-le job peut effectuer jusqu'à **trois tentatives**. **Chaque réponse** doit
-correspondre à l'empreinte et au décompte de règles déjà approuvés ; si
-aucune tentative ne fournit cette version, l'audit Semgrep reste **en échec**.
-Les nouvelles règles ne sont jamais acceptées par simple retry. Les contenus
-soumis à la licence Semgrep Rules ne sont pas redistribués dans ce dépôt.
+Si le registre Semgrep ne renvoie pas les règles approuvées,
+le job effectue au maximum **trois tentatives**, puis **échoue clairement** :
+aucune règle non vérifiée n'est exécutée. Cela indique un problème
+d'intégrité ou de disponibilité du fournisseur, **pas une vulnérabilité
+prouvée de votre code**. Consultez le rapport `semgrep-registry-drift.json`
+pour connaître le format et l'empreinte reçus, sans exposer les règles.
+L'[incident #29](https://github.com/loic31000/security-ci/issues/29)
+suit ce problème. Les diagnostics avancés ont été retirés du chemin normal
+pour simplifier et accélérer l'audit.
 
 **jscpd npm :** `locks/jscpd/package-lock.json` reproduit exactement
 l'inventaire de dépendances npm approuvé et audité dans le SBOM. Le script
