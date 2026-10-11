@@ -350,10 +350,21 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir -r .audit-python-lock/locks/python-maintainability.txt
 
+      - name: Load integrity-pinned npm toolchain
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: adb2328ad97333ed89eba86088613f914d4ba4eb
+          path: .audit-jscpd-tools
+          persist-credentials: false
+
+      - name: Install only approved jscpd npm artifacts
+        run: bash .audit-jscpd-tools/scripts/install_jscpd.sh "$RUNNER_TEMP/security-jscpd"
+
       - name: Measure duplication
         run: |
           mkdir -p "$RUNNER_TEMP/maintainability"
-          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
+          "$RUNNER_TEMP/security-jscpd/node_modules/.bin/jscpd" --mode strict --min-tokens 100 --min-lines 10 --reporters json --output "$RUNNER_TEMP/maintainability" --threshold 100 --ignore '**/node_modules/**,**/vendor/**,**/dist/**,**/build/**,**/.venv/**,**/coverage/**' .
 
       - name: Verify exact duplicate detection with a synthetic clone
         run: |
@@ -371,7 +382,7 @@ jobs:
           for name in ("sample_a.py", "sample_b.py"):
               (root / name).write_text(body)
           PY
-          npx --yes jscpd@5.4.1 --mode strict --min-tokens 100 --min-lines 10 \
+          "$RUNNER_TEMP/security-jscpd/node_modules/.bin/jscpd" --mode strict --min-tokens 100 --min-lines 10 \
             --reporters json --output "$fixture/reports" --threshold 100 "$fixture/source"
           python3 - "$fixture/reports/jscpd-report.json" <<'PY'
           import json
