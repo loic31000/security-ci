@@ -89,6 +89,38 @@ jobs:
             echo ''
             cat "$RUNNER_TEMP/toolchain-summary.txt"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Prepare synthetic vulnerable Trivy target
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-positive-control"
+          printf 'Django==1.11.0\n' > "$RUNNER_TEMP/trivy-positive-control/requirements.txt"
+      - name: Scan known vulnerable synthetic dependency
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          scan-type: fs
+          scan-ref: ${{ runner.temp }}/trivy-positive-control
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: json
+          output: ${{ runner.temp }}/trivy-positive-control/trivy-canary.json
+          exit-code: '0'
+          timeout: 15m
+          cache: false
+      - name: Verify Trivy can detect deliberate dependency advisories
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = Path(os.environ["RUNNER_TEMP"]) / "trivy-positive-control/trivy-canary.json"
+          obj = json.loads(report.read_text())
+          targets = obj.get("Results") or []
+          count = sum(len(row.get("Vulnerabilities") or []) for row in targets)
+          if count < 1:
+              raise SystemExit("Trivy failed to flag synthetic legacy Django dependency")
+          print(f"Trivy positive control: {count} advisory candidate(s) detected")
+          PY
+
       - name: Keep dependency inventory and Trivy results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
