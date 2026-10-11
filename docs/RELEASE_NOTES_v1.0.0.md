@@ -9,7 +9,8 @@
 - Rapports SARIF techniques et rapports Markdown lisibles pour les développeurs :
   règle, explication, gravité et emplacement lorsque renseigné.
 - Mesures de maintenabilité jscpd, Radon et Lizard avec `maintainability.md`.
-- Tests optionnels du projet appelant et collecte optionnelle de couverture.
+- Tests du dépôt appelant obligatoirement configurés (échec sans commande réelle) ;
+  tests unitaires intégrés pour le dépôt `security-ci`, couverture optionnelle.
 - Deux modes : rapport (alertes informatives) et strict (alertes bloquantes) ;
   les erreurs techniques restent bloquantes.
 - Tests automatisés des générateurs de rapports.
