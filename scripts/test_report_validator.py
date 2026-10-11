@@ -31,13 +31,15 @@ def validate(xml_path, workspace, started_ns):
     )
     if failed:
         raise ValueError(f"JUnit report has {failed} failed, errored or skipped tests")
-    for suite in (root if root.tag == "testsuite" else list(root)):
-        if suite.tag != "testsuite":
-            continue
-        for attr in ("failures", "errors"):
+    suites = [root] if root.tag == "testsuite" else [root, *root.findall(".//testsuite")]
+    for suite in suites:
+        for attr in ("failures", "errors", "skipped"):
             value = suite.get(attr, "0")
             if not value.isdigit() or int(value) != 0:
                 raise ValueError(f"JUnit suite contains nonzero {attr}")
+        declared = suite.get("tests")
+        if declared is not None and (not declared.isdigit() or int(declared) < 1):
+            raise ValueError("JUnit suite claims no executed tests")
     return len(cases)
 
 
