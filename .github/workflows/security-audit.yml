@@ -169,9 +169,9 @@ jobs:
           fixture_dir="$RUNNER_TEMP/security-detection-canary"
           mkdir -p "$fixture_dir"
           if [[ "$SCANNER" == "semgrep" ]]; then
-            printf 'def unsafe(user_input):\\n    eval(user_input)\\n' > "$fixture_dir/unsafe.py"
-            semgrep scan --config p/security-audit --metrics off \\
-              --disable-version-check --sarif \\
+            printf 'def unsafe(user_input):\n    eval(user_input)\n' > "$fixture_dir/unsafe.py"
+            semgrep scan --config p/security-audit --metrics off \
+              --disable-version-check --sarif \
               --output "$fixture_dir/semgrep.sarif" "$fixture_dir/unsafe.py"
           else
             python3 - "$fixture_dir/canary.txt" <<'PY'
@@ -179,12 +179,12 @@ jobs:
           import sys
           # Synthetic, nonfunctional example; assembled only on ephemeral CI runner.
           Path(sys.argv[1]).write_text(
-              'example = "' + 'ghp_' + 'wA9mK2pLxN4vRtQzY6bC8dEfGhJlM0oPq1rS' + '"\\n'
+              'example = "' + 'ghp_' + 'wA9mK2pLxN4vRtQzY6bC8dEfGhJlM0oPq1rS' + '"\n'
           )
           PY
-            "$RUNNER_TEMP/security-bin/gitleaks" dir "$fixture_dir" \\
-              --redact=100 --report-format sarif \\
-              --report-path "$fixture_dir/gitleaks.sarif" \\
+            "$RUNNER_TEMP/security-bin/gitleaks" dir "$fixture_dir" \
+              --redact=100 --report-format sarif \
+              --report-path "$fixture_dir/gitleaks.sarif" \
               --exit-code 0 --no-banner
           fi
           python3 - "$fixture_dir/$SCANNER.sarif" <<'PY'
