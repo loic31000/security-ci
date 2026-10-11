@@ -204,6 +204,22 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  shellcheck:
+    name: ShellCheck - Bash scripts
+    if: github.repository == 'loic31000/security-ci'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Analyze all engine shell scripts
+        run: |
+          shellcheck --version
+          shellcheck --severity=warning scripts/*.sh
+
   maintainability:
     name: Maintainability - duplication and Python metrics
     runs-on: ubuntu-24.04
@@ -355,12 +371,40 @@ jobs:
         if: ${{ steps.test_config.outputs.self_test == 'true' }}
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 
+      - name: Record certification start time
+        if: ${{ inputs.require_test_report && steps.test_config.outputs.caller_test == 'true' }}
+        run: python -c 'import time,os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"test-start.ns").write_text(str(time.time_ns()))'
+
       - name: Run caller-provided tests
         if: ${{ steps.test_config.outputs.caller_test == 'true' }}
         id: caller_tests
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
         run: bash --noprofile --norc -e -o pipefail -c "$TEST_COMMAND"
+
+      - name: Load strict JUnit verifier
+        if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: loic31000/security-ci
+          ref: 1e40ebca8f59c7373b343b6ea23e891d8483f37b
+          path: .audit-cert-tools
+          persist-credentials: false
+
+      - name: Certify at least one freshly executed JUnit test
+        if: ${{ inputs.require_test_report && steps.caller_tests.outcome == 'success' }}
+        env:
+          TEST_REPORT_PATH: ${{ inputs.test_report_path }}
+        run: |
+          python -m pip install 'defusedxml==0.7.1'
+          python .audit-cert-tools/scripts/test_report_validator.py \
+            --path "$TEST_REPORT_PATH" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --start-ns "$(cat "$RUNNER_TEMP/test-start.ns")" | tee "$RUNNER_TEMP/junit-validation.txt"
+          {
+            echo '### Strict JUnit test certification'
+            cat "$RUNNER_TEMP/junit-validation.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Résumé des tests et de la couverture
         if: always()
