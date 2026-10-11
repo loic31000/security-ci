@@ -109,6 +109,32 @@ jobs:
           print(f"Trivy positive control: {count} advisory candidate(s) detected")
           PY
 
+      - name: Generate CycloneDX SBOM for resolved toolchain
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: 'v0.70.0'
+          scan-type: fs
+          scan-ref: ${{ runner.temp }}/security-engine-manifests
+          scanners: vuln
+          format: cyclonedx
+          output: ${{ runner.temp }}/security-engine-manifests/engine.cdx.json
+          exit-code: '0'
+          timeout: 15m
+          cache: false
+      - name: Validate manifest drift and SBOM evidence
+        run: |
+          python scripts/manifest_provenance.py \
+            --directory "$RUNNER_TEMP/security-engine-manifests" \
+            --baseline locks/engine-manifest-sha256.json \
+            --sbom "$RUNNER_TEMP/security-engine-manifests/engine.cdx.json" \
+            --provenance "$RUNNER_TEMP/security-engine-manifests/engine-provenance.json"
+          {
+            echo '### Dependency reproducibility evidence'
+            echo ''
+            echo 'Four manifests matched the reviewed SHA-256 baseline.'
+            echo 'CycloneDX SBOM validated; see engine.cdx.json and engine-provenance.json in artifacts.'
+            echo 'Hashes are drift checks, NOT signed attestations or proof of exploitability.'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Keep dependency inventory and Trivy results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -120,5 +146,7 @@ jobs:
             ${{ runner.temp }}/security-engine-manifests/go/go.mod
             ${{ runner.temp }}/security-engine-manifests/go/go.sum
             ${{ runner.temp }}/security-engine-manifests/trivy-engine.json
+            ${{ runner.temp }}/security-engine-manifests/engine.cdx.json
+            ${{ runner.temp }}/security-engine-manifests/engine-provenance.json
           retention-days: 7
           if-no-files-found: warn
