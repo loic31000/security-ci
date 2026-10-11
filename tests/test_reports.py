@@ -29,6 +29,22 @@ class ReportsTest(unittest.TestCase):
         self.assertIn("Possible injection", result)
         self.assertIn("blob/123abc/src/db.go#L97", result)
 
+    def test_sarif_default_warning_matches_active_candidate_decision(self):
+        renderer = load("sarif_to_markdown")
+        data = {"runs": [{"tool": {"driver": {"rules": [
+            {"id": "explicit-note", "defaultConfiguration": {"level": "note"}}
+        ]}}, "results": [
+            {"ruleId": "generic-api-key", "message": {"text": "SECRET_MUST_NOT_LEAK"}},
+            {"ruleId": "explicit-note", "message": {"text": "Documented info"}},
+        ]}]}
+        markdown = renderer.render(data, "gitleaks")
+        self.assertIn("**Gravité SARIF :** warning", markdown)
+        self.assertIn("**Gravité SARIF :** note", markdown)
+        self.assertIn("À vérifier : résultat automatique non confirmé", markdown)
+        self.assertIn("Non bloquant", markdown)
+        self.assertNotIn("non précisée", markdown)
+        self.assertNotIn("SECRET_MUST_NOT_LEAK", markdown)
+
     def test_secret_message_not_leaked(self):
         module = load("sarif_to_markdown")
         result = module.render({"runs": [{"results": [{
