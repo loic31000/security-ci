@@ -77,10 +77,21 @@ reconnue et **indique les familles non couvertes**. Les avis CVE restent
 informatifs jusqu'à revue humaine ; les erreurs techniques, inventaires
 absents et scans sans cibles échouent.
 
-Ces dépendances sont **résolues au moment de l'exécution**. Une analyse du
-moteur peut différer d'un runner à l'autre ; elle n'est pas une preuve de
-chaîne d'approvisionnement entièrement reproductible. Ne jamais présenter
-un rapport sans vulnérabilités comme une garantie de sécurité.
+Les dépendances Python et Go du moteur sont désormais **verrouillées avant
+installation** : le fichier `locks/python-tools.txt` impose 75 versions
+transitives avec SHA-256, via `pip --require-hashes`, et
+`locks/gitleaks/go.mod` et `go.sum` figent les versions et contrôlent les
+archives Go avec `GOSUMDB=sum.golang.org`, `go mod verify` et
+`go build -mod=readonly`. Les jobs du workflow réutilisable utilisent des
+copies épinglées par SHA de ces verrous centraux, jamais une version flottante.
+Les sous-ensembles Python pour la maintenabilité, les tests et zizmor sont
+vérifiés contre le verrou central par tests de régression.
+
+**Limites :** cette vérification protège les téléchargements Python/Go du
+moteur, mais pas la totalité des actions, des règles Semgrep distantes ou des
+dépendances du projet appelant. Le lock npm `jscpd` et les bases Trivy
+sont contrôlés séparément. Un résultat sans vulnérabilité n'est jamais une
+garantie de sécurité.
 
 ## Contrôles positifs et couverture des dépendances
 
@@ -139,11 +150,12 @@ examiner les CVE, reproduire les tests des scanners, puis mettre à jour les
 empreintes de référence dans une PR dédiée. Un échec de dérive peut indiquer
 une **mise à jour légitime**, pas une faille ; il demande une revue.
 
-**Limites :** les empreintes détectent la dérive mais ne verrouillent pas
-encore tous les artefacts téléchargés ; le SBOM n'est pas une attestation
-signée et une nomenclature CycloneDX non vide n'est pas une garantie de
-couverture exhaustive. Le job vérifie séparément les trois familles de
-cibles Trivy.
+**Limites :** les téléchargements Python et Go sont désormais vérifiés par
+leurs hachages avant installation, puis les quatre manifests sont contrôlés
+après résolution. Le SBOM n'est pas une attestation signée et une nomenclature
+CycloneDX non vide n'est pas une garantie de couverture exhaustive. Les
+règles Semgrep téléchargées, les actions et les téléchargements npm nécessitent
+leurs propres contrôles ; le job vérifie séparément les trois familles Trivy.
 
 ## Rapports de sécurité lisibles pour les développeurs
 
@@ -358,10 +370,13 @@ privés consomment le quota de leur propriétaire. Un workflow central public ne
 rend pas gratuites les exécutions appelées depuis des dépôts privés. Le stockage
 des artifacts a ses propres limites.
 
-Les actions sont figées par SHA et les scanners par version. Go utilise la dernière
-révision corrective de la branche 1.25. Les dépendances transitives des installations
-Python ne sont pas verrouillées par hash. Les règles Semgrep téléchargées et les
-bases CVE Trivy évoluent : les résultats ne sont pas parfaitement reproductibles.
+Les actions sont figées par SHA et les scanners par version. Go utilise la
+révision corrective disponible dans la branche 1.25. Les téléchargements
+Python sont vérifiés par SHA-256 (`--require-hashes`), et les modules Go par
+`go.sum`, la base de sommes Go et `-mod=readonly`. Les sous-ensembles
+de paquets des jobs GitHub Actions sont issus du verrou central. Les règles
+Semgrep téléchargées et les bases CVE Trivy évoluent : les résultats ne sont
+pas parfaitement reproductibles.
 
 L'analyse de sécurité ne lance pas les scripts d'installation. Le job de tests exécute uniquement la commande explicitement fournie par le dépôt appelant. Trivy
 analyse les manifests/lockfiles qu'il prend en charge : un résultat sans alerte
