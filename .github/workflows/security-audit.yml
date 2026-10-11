@@ -92,7 +92,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: loic31000/security-ci
-          ref: 3524b243bd6b64961006b980fea53c65d904a79b
+          ref: 7907cfe8105de4045f5f6ad48afaab29ec5e0aab
           path: .audit-drift-tools
           persist-credentials: false
 
@@ -125,10 +125,30 @@ jobs:
             python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
               "$bundle" .audit-python-lock/locks/semgrep-security-audit.json \
               "$REPORT_DIR/semgrep-registry-drift.json"
+            # Produce an anonymous rule-object digest even if this runner only
+            # received JSON. The failed SHA gate still exits unconditionally.
+            PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
+              python3 .audit-drift-tools/scripts/semgrep_ruleset_fingerprint.py \
+                --source "$bundle" \
+                --lock .audit-python-lock/locks/semgrep-security-audit.json \
+                --mode observed \
+                --output "$REPORT_DIR/semgrep-rule-fingerprint.json"
             echo "::error::The reviewed Semgrep ruleset is unavailable. Fail closed; review the registry drift separately."
             exit 1
           fi
           echo "SEMGREP_CONFIG_PATH=$RUNNER_TEMP/semgrep-approved/rules.yaml" >> "$GITHUB_ENV"
+
+      - name: Fingerprint exact approved Semgrep rule objects without exporting rules
+        if: matrix.scanner == 'semgrep'
+        run: |
+          # The preceding integrity gate already authenticated this YAML.
+          # Diagnostics are anonymous, cannot authorize rules and are non-blocking.
+          PYTHONPATH="$GITHUB_WORKSPACE/.audit-python-lock/scripts" \
+            python3 .audit-drift-tools/scripts/semgrep_ruleset_fingerprint.py \
+              --source "$RUNNER_TEMP/semgrep-approved/rules.yaml" \
+              --lock .audit-python-lock/locks/semgrep-security-audit.json \
+              --mode approved \
+              --output "$REPORT_DIR/semgrep-rule-fingerprint.json"
 
       - name: Compare actual Semgrep YAML and JSON responses without granting trust
         if: matrix.scanner == 'semgrep'

@@ -96,6 +96,26 @@ jobs:
           git show "FETCH_HEAD:scripts/semgrep_ruleset_compare.py" |
             cmp - scripts/semgrep_ruleset_compare.py
 
+      - name: Verify cross-run Semgrep fingerprint script matches tested source
+        run: |
+          set -euo pipefail
+          fingerprint_ref="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          workflow = Path(".github/workflows/security-audit.yml").read_text(encoding="utf-8")
+          match = re.search(
+              r"(?ms)^\s+- name: Load SHA-pinned non-sensitive Semgrep drift diagnostics\s*.*?^\s+ref:\s+([a-f0-9]{40})\s*$",
+              workflow,
+          )
+          if not match:
+              raise SystemExit("missing immutable Semgrep fingerprint source ref")
+          print(match.group(1))
+          PY
+          )"
+          git fetch --no-tags --depth=1 origin "$fingerprint_ref"
+          git show "FETCH_HEAD:scripts/semgrep_ruleset_fingerprint.py" |
+            cmp - scripts/semgrep_ruleset_fingerprint.py
+
       - name: Verify pinned stack coverage checker matches tested source
         run: |
           set -euo pipefail
