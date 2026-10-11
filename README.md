@@ -112,6 +112,14 @@ validation des contrôles positifs, mettre à jour l'empreinte dans une PR
 séparée. Les règles ne sont pas recopiées dans le dépôt : un accès réseau au
 registre reste nécessaire.
 
+En présence de réponses divergentes du registre (voir
+[incident #29](https://github.com/loic31000/security-ci/issues/29)),
+le job peut effectuer jusqu'à **trois tentatives**. **Chaque réponse** doit
+correspondre à l'empreinte et au décompte de règles déjà approuvés ; si
+aucune tentative ne fournit cette version, l'audit Semgrep reste **en échec**.
+Les nouvelles règles ne sont jamais acceptées par simple retry. Les contenus
+soumis à la licence Semgrep Rules ne sont pas redistribués dans ce dépôt.
+
 **jscpd npm :** `locks/jscpd/package-lock.json` reproduit exactement
 l'inventaire de dépendances npm approuvé et audité dans le SBOM. Le script
 `scripts/install_jscpd.sh` vérifie l'empreinte SHA-256 du lock,
