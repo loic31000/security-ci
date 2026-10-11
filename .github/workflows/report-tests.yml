@@ -95,6 +95,25 @@ jobs:
           git fetch --no-tags --depth=1 origin "$coverage_ref"
           git show "FETCH_HEAD:scripts/stack_coverage.py" |
             cmp - scripts/stack_coverage.py
+      - name: Verify executed self-test dependency lock matches tested lock
+        run: |
+          set -euo pipefail
+          lock_ref="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          source = Path(".github/workflows/security-audit.yml").read_text(encoding="utf-8")
+          match = re.search(
+              r"(?ms)^\s+- name: Charger les dépendances des tests du moteur approuvées\s*.*?^\s+ref:\s+([a-f0-9]{40})\s*$",
+              source,
+          )
+          if not match:
+              raise SystemExit("missing immutable self-test dependency checkout")
+          print(match.group(1))
+          PY
+          )"
+          git fetch --no-tags --depth=1 origin "$lock_ref"
+          git show "FETCH_HEAD:locks/python-report-tests.txt" |
+            cmp - locks/python-report-tests.txt
       - name: Test Markdown report generators
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Prove certification on real executed JUnit tests

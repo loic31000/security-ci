@@ -62,6 +62,33 @@ licence Semgrep Rules interdisent de redistribuer les règles dans le dépôt.
 La stabilité du registre reste une limite de disponibilité indépendante
 de la précision des scanners.
 
+### Comparaison locale du contenu des règles — contrôle facultatif
+
+Le script `scripts/semgrep_ruleset_compare.py` compare **hors dépôt**
+deux réponses dont on dispose réellement : un YAML de référence dont
+**l'empreinte exacte a déjà été approuvée**, et un JSON du registre.
+Il valide d'abord le YAML avec le vérificateur historique (SHA-256 et
+nombre d'IDs), puis compare les objets de règles par identifiant, après
+parsing YAML/JSON et normalisation des clés. Seuls les **nombres**
+de règles communes, ajoutées, manquantes ou dont les attributs diffèrent
+sont écrits dans le rapport. Aucun texte, nom de règle, expression ou
+message n'est publié.
+
+```bash
+python3 scripts/semgrep_ruleset_compare.py \
+  --approved-yaml /chemin/prive/regles-approuvees.yaml \
+  --observed-json /chemin/prive/reponse-registre.json \
+  --lock locks/semgrep-security-audit.json \
+  --output /chemin/prive/comparaison.json
+```
+
+**Important :** ce comparateur ne télécharge ni n'archive les règles, ne
+modifie pas les règles autorisées et n'est **jamais utilisé pour décider
+d'exécuter un scan**. L'égalité d'objets de règles ne prouve pas
+l'équivalence de toute la configuration ou du moteur Semgrep. Si le YAML
+réel approuvé n'est pas disponible, la comparaison reste
+`INCOMPARABLE`, et l'incident #29 n'est pas résolu.
+
 ## Étape suivante — étendre les stacks sans créer de faux « zéro alerte » (P1)
 
 Ordre proposé, **à réévaluer avec les usages réels** :
