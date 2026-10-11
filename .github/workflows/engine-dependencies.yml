@@ -42,7 +42,7 @@ jobs:
           mkdir -p "$MANIFESTS/python" "$MANIFESTS/node" "$MANIFESTS/go"
           python -m venv "$RUNNER_TEMP/engine-py"
           "$RUNNER_TEMP/engine-py/bin/python" -m pip install \
-            --disable-pip-version-check --require-hashes --no-cache-dir \
+            --disable-pip-version-check --require-hashes --only-binary=:all: --no-cache-dir \
             -r locks/python-tools.txt
           "$RUNNER_TEMP/engine-py/bin/python" -m pip freeze > "$MANIFESTS/python/requirements.txt"
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
