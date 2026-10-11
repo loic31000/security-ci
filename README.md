@@ -82,6 +82,43 @@ moteur peut différer d'un runner à l'autre ; elle n'est pas une preuve de
 chaîne d'approvisionnement entièrement reproductible. Ne jamais présenter
 un rapport sans vulnérabilités comme une garantie de sécurité.
 
+## Contrôles positifs et couverture des dépendances
+
+L'audit ne se contente plus de vérifier qu'un scanner termine sans erreur :
+les jobs vérifient également que des **exemples délibérément détectables**
+déclenchent bien les outils. Sur des fichiers **synthétiques générés uniquement
+dans `RUNNER_TEMP`**, sans secret réel ni modification d'un dépôt appelant :
+
+- Semgrep analyse un `eval` non fiable et doit produire une détection.
+- Gitleaks doit retrouver un **faux jeton de démonstration** qui respecte la
+  syntaxe d'une règle connue (les valeurs ne sont pas publiées dans les artifacts).
+- zizmor analyse un workflow volontairement insuffisamment épinglé et doté
+  de permissions trop larges ; la collection YAML invalide est rejetée.
+- Trivy examine une ancienne dépendance Django fictive et doit détecter
+  au moins un avis de vulnérabilité connu.
+- jscpd doit retrouver deux fonctions **identiques sur plus de 30 lignes**.
+
+Ces tests prouvent seulement que la chaîne de détection répond à ces
+échantillons : ils ne prouvent **ni** la couverture exhaustive d'un vrai projet
+**ni** l'absence de faux positifs. Un résultat « 0 détection » sur un
+dépôt réel doit toujours être interprété avec l'inventaire des cibles
+analysées.
+
+L'audit de dépendances moteur **échoue** désormais si Trivy ne reconnaît
+pas chacune des trois familles prévues (`requirements.txt`,
+`package-lock.json` et `go.mod`) ; un inventaire partiel ne constitue
+jamais un rapport propre. jscpd utilise la version **5.4.1**, dont le
+moteur est écrit en Rust, afin d'éviter les dépendances JavaScript
+historiques de la branche v4. Le binaire Gitleaks conserve sa version
+fonctionnelle `v8.30.1` ; ses bibliothèques Go transitives
+`golang.org/x/crypto` et `golang.org/x/text` sont alignées respectivement
+sur `v0.55.0` et `v0.41.0` et compilées sur un module temporaire isolé.
+Toute évolution de versions doit repasser les contrôles de détection.
+
+Les avis de vulnérabilité restant éventuellement présents sont
+**des candidats à examiner humainement**. Aucune alerte ne doit être
+ignorée pour rendre un compteur artificiellement vert.
+
 ## Rapports de sécurité lisibles pour les développeurs
 
 Chaque analyse de sécurité conserve le **SARIF** (pour les outils) et produit
