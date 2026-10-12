@@ -49,6 +49,16 @@ exactes des exécutions et l'essai externe non fusionné :
 python3 scripts/release_readiness.py --evidence chemin/vers/preuves-verifiees.json
 ```
 
+Le tableau `stability_runs` comprend au moins trois objets avec `url`
+(`https://github.com/loic31000/security-ci/actions/runs/...`),
+`commit` (identique à `security_ci_commit`),
+`attempt: 1`, `conclusion: "success"` et `semgrep: "success"`.
+Les identifiants des runs doivent être différents. Le vérificateur
+contrôle la **cohérence déclarative** ; un humain doit vérifier que les
+jobs ont réellement été exécutés, sans relance, et que le journal Semgrep
+confirme les **225 règles approuvées**. La consultation de la seule
+dernière exécution verte ne suffit plus.
+
 L'objet `external_trial` doit aussi fournir des **preuves d'exécution sur
 runner**, pas seulement un statut textuel `success` :
 
