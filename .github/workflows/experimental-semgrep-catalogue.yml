@@ -79,6 +79,10 @@ jobs:
       - name: Inventory pinned GitLab and 0xdea language/CWE coverage metadata
         run: python3 scripts/experiments/measure_rule_coverage.py
 
+      - name: Inspect reviewed 225-rule Semgrep bundle only if exact SHA matches
+        continue-on-error: true
+        run: python3 scripts/experiments/observe_approved_semgrep_profile.py
+
       - name: Test annotated upstream positive and benign rule examples
         run: python3 scripts/experiments/test_official_rule_examples.py
 
@@ -95,5 +99,6 @@ jobs:
             ${{ runner.temp }}/catalog-provenance.json
             ${{ runner.temp }}/official-author-fixtures.json
             ${{ runner.temp }}/candidate-coverage-matrix.json
+            ${{ runner.temp }}/approved-profile-metadata.json
           retention-days: 7
           if-no-files-found: warn
