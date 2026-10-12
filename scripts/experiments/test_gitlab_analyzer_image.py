@@ -10,6 +10,8 @@ import time
 
 TAG = "registry.gitlab.com/security-products/semgrep:6"
 PREFIX = "registry.gitlab.com/security-products/semgrep@sha256:"
+PINNED_DIGEST = "fd543fe610bf619f9370397663289ddb4a394d50fec81f7525de7700ea8ce642"
+PINNED_REF = PREFIX + PINNED_DIGEST
 ROOT = Path(os.environ["RUNNER_TEMP"]) / "gitlab-oci-test"
 ROOT.mkdir(parents=True, exist_ok=True)
 EVIDENCE = ROOT / "evidence.json"
@@ -66,20 +68,20 @@ def smoke():
     positive, benign, reports = (ROOT / "positive", ROOT / "benign", ROOT / "reports")
     for folder in (positive, benign, reports):
         folder.mkdir(exist_ok=True)
-    output = {"status": "NOT_TESTED", "image_discovery_tag": TAG,
+    output = {"status": "NOT_TESTED", "documented_upstream_tag": TAG, "pinned_image": PINNED_REF,
               "approved_for_release": False, "scan_network": "none"}
     try:
-        _, seconds = run(["docker", "pull", TAG], timeout=900)
+        _, seconds = run(["docker", "pull", PINNED_REF], timeout=900)
         output["anonymous_pull"] = True
         output["pull_seconds"] = seconds
-        raw, _ = run(["docker", "image", "inspect", TAG, "--format", "{{json .RepoDigests}}"])
+        raw, _ = run(["docker", "image", "inspect", PINNED_REF, "--format", "{{json .RepoDigests}}"])
         refs = [ref for ref in json.loads(raw) if ref.startswith(PREFIX)
                 and re.fullmatch("[a-f0-9]{64}", ref[len(PREFIX):])]
-        if len(refs) != 1:
-            raise RuntimeError("no unique OCI digest for the official image")
-        ref = refs[0]
+        if PINNED_REF not in refs:
+            raise RuntimeError("the image is not the source-pinned OCI digest")
+        ref = PINNED_REF
         output["resolved_digest"] = ref.split("@", 1)[1]
-        nbytes, _ = run(["docker", "image", "inspect", TAG, "--format", "{{.Size}}"])
+        nbytes, _ = run(["docker", "image", "inspect", PINNED_REF, "--format", "{{.Size}}"])
         output["image_size_bytes"] = int(nbytes)
         shell = ('test -d /rules && '
                  'echo files=$(find /rules -type f | wc -l) && '
@@ -142,7 +144,7 @@ def smoke():
                             "sarif_findings", "json_sarif_parity"):
                     if key in output:
                         dest.write("- " + key + ": " + str(output[key]) + "\n")
-                dest.write("\nThe digest is discovered during this test, not yet source-pinned or reviewed.\n")
+                dest.write("\nThe OCI digest is source-pinned for this experiment but not approved for production.\n")
                 dest.write("No parity with 225 Semgrep rules or redistribution rights has been shown.\n")
     return 0 if output["status"] == "SMOKE_PASS" else 1
 
