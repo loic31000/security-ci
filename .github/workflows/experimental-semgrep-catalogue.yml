@@ -76,6 +76,9 @@ jobs:
       - name: Compare pinned GitLab source to mirror by exact file hash
         run: python3 scripts/experiments/compare_gitlab_provenance.py
 
+      - name: Inventory pinned GitLab and 0xdea language/CWE coverage metadata
+        run: python3 scripts/experiments/measure_rule_coverage.py
+
       - name: Test annotated upstream positive and benign rule examples
         run: python3 scripts/experiments/test_official_rule_examples.py
 
@@ -91,5 +94,6 @@ jobs:
             ${{ runner.temp }}/catalog-qualification.json
             ${{ runner.temp }}/catalog-provenance.json
             ${{ runner.temp }}/official-author-fixtures.json
+            ${{ runner.temp }}/candidate-coverage-matrix.json
           retention-days: 7
           if-no-files-found: warn
