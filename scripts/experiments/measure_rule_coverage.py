@@ -111,7 +111,7 @@ def main():
     external = TEMP / "candidate-0xdea"
     upstream_permissive = {
         name: source for name, source in upstream.items()
-        if name.startswith(tuple("x/" for x in ("c", "csharp", "go", "java", "javascript", "python", "scala", "php", "ruby", "rust", "swift", "kotlin", "typescript")))
+        if name.startswith(tuple(lang + "/" for lang in ("c", "csharp", "go", "java", "javascript", "python", "scala", "php", "ruby", "rust", "swift", "kotlin", "typescript")))
         and permissive_header(source)
     }
     # The experimental evaluator uses precisely 210 paths selected via pinned
