@@ -42,8 +42,8 @@ de tag, de release GitHub ou de déploiement.
 
 Le script `scripts/release_readiness.py` accepte un JSON de preuves contenant
 les dix statuts GitHub, les nombres de tests et cibles, les cinq contrôles
-positifs, les quatre négatifs, les URL exactes des exécutions et l'essai
-externe non fusionné :
+positifs, les quatre négatifs, **trois preuves `stability_runs`**, les URL
+exactes des exécutions et l'essai externe non fusionné :
 
 ```bash
 python3 scripts/release_readiness.py --evidence chemin/vers/preuves-verifiees.json
