@@ -56,25 +56,22 @@ jobs:
           mv .candidate-qodana "$RUNNER_TEMP/candidate-qodana"
           mv .candidate-0xdea "$RUNNER_TEMP/candidate-0xdea"
 
-      - name: Probe original GitLab pinned source (informational only)
+      - name: Probe official GitLab immutable archive by repository path
         continue-on-error: true
         run: |
           set -euo pipefail
-          # This GitLab revision is an upstream snapshot, not mirror parity.
+          # The official GitLab 2025 revision is checked separately from the GitHub fork.
           source_sha="0e4c0f45df16bfb1fa537d53cd31fdfa803a084d"
-          url="https://gitlab.com/api/v4/projects/34675721/repository/archive.tar.gz?sha=$source_sha"
+          url="https://gitlab.com/gitlab-org/security-products/sast-rules/-/archive/$source_sha/sast-rules-$source_sha.tar.gz"
           curl --fail --silent --show-error --location --retry 2 \
             --connect-timeout 15 --max-time 90 "$url" \
             --output "$RUNNER_TEMP/gitlab-official.tar.gz"
           tar -tzf "$RUNNER_TEMP/gitlab-official.tar.gz" \
             > "$RUNNER_TEMP/gitlab-official-tree.txt"
-          echo "Pinned official GitLab archive fetched for commit $source_sha"
-          echo "Files in archive:"
+          echo "Retrieved GitLab canonical snapshot at $source_sha"
+          echo "Archive members:"
           wc -l < "$RUNNER_TEMP/gitlab-official-tree.txt"
-          if ! grep -q 'python/eval/rule-eval.yml$' "$RUNNER_TEMP/gitlab-official-tree.txt"; then
-            echo "::error::Official GitLab archive did not contain expected Python rule"
-            exit 1
-          fi
+          grep -q 'python/eval/rule-eval.yml$' "$RUNNER_TEMP/gitlab-official-tree.txt"
 
       - name: Audit rule file licenses and test vulnerability/benign pairs
         run: python3 scripts/experiments/evaluate_rule_catalogs.py
