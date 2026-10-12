@@ -64,6 +64,18 @@ def inventory(rules):
     }
 
 
+def bucket_file_license(header):
+    if "GitLab Enterprise Edition" in header:
+        return "PROPRIETARY_GITLAB_EE"
+    if "Commons Clause" in header:
+        return "RESTRICTED_COMMONS_CLAUSE"
+    if "GNU Lesser General Public License v3.0" in header:
+        return "LGPL_V3_CLAIMED"
+    if re.search(r"(?im)^#\\s*License:\\s*(MIT|Apache 2\\.0)\\b", header):
+        return "MIT_OR_APACHE_CLAIMED"
+    return "UNDECLARED"
+
+
 def collect_rules():
     files = sorted(list(ROOT.rglob("*.yml")) + list(ROOT.rglob("*.yaml")))
     if not files:
@@ -71,11 +83,15 @@ def collect_rules():
     all_rules = []
     license_headers = collections.Counter()
     rule_metadata_licenses = collections.Counter()
+    rules_by_bucket = collections.defaultdict(list)
+    files_by_bucket = collections.Counter()
     parse_errors = []
     for path in files:
         try:
             data = path.read_text(encoding="utf-8")
             header = "\n".join(data.splitlines()[:14])
+            bucket = bucket_file_license(header)
+            files_by_bucket[bucket] += 1
             match = MIT.search(header)
             if not match:
                 license_headers["UNDECLARED"] += 1
@@ -91,14 +107,20 @@ def collect_rules():
                         license_value = meta.get("license")
                         if license_value:
                             rule_metadata_licenses[str(license_value)[:50]] += 1
+                rule_bucket = bucket
+                if isinstance(rule, dict):
+                    m = rule.get("metadata") or {}
+                    if isinstance(m, dict) and "Commons Clause" in str(m.get("license", "")):
+                        rule_bucket = "RESTRICTED_COMMONS_CLAUSE"
+                rules_by_bucket[rule_bucket].append(rule)
                 all_rules.append(rule)
         except Exception as exc:
             parse_errors.append(type(exc).__name__)
-    return files, all_rules, dict(license_headers), dict(rule_metadata_licenses), parse_errors
+    return files, all_rules, dict(license_headers), dict(rule_metadata_licenses), parse_errors, dict(rules_by_bucket), dict(files_by_bucket)
 
 
 def main():
-    files, rules, licenses, per_rule_licenses, parse_errors = collect_rules()
+    files, rules, licenses, per_rule_licenses, parse_errors, buckets, bucket_files = collect_rules()
     image = inventory(rules)
     result = {
         "status": "IMAGE_METADATA_MEASURED",
@@ -106,6 +128,9 @@ def main():
         "image_config_yaml_files": len(files),
         "image_rule_stats": image,
         "file_header_licenses": licenses,
+        "files_by_license_bucket": bucket_files,
+        "rules_by_license_bucket": {k: len(v) for k, v in buckets.items()},
+        "plausibly_oss_licensed_rules": inventory(buckets.get("LGPL_V3_CLAIMED", []) + buckets.get("MIT_OR_APACHE_CLAIMED", [])),
         "rule_metadata_license_declarations": per_rule_licenses,
         "files_with_parse_errors": len(parse_errors),
         "parse_error_types": dict(collections.Counter(parse_errors)),
