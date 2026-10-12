@@ -56,6 +56,37 @@ jobs:
           mv .candidate-qodana "$RUNNER_TEMP/candidate-qodana"
           mv .candidate-0xdea "$RUNNER_TEMP/candidate-0xdea"
 
+      - name: Probe original GitLab pinned source (informational only)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # This 2025 GitLab revision is an official source snapshot, NOT the
+          # mirror version or approval for production redistribution.
+          source_sha="0e4c0f45df16bfb1fa537d53cd31fdfa803a084d"
+          url="https://gitlab.com/api/v4/projects/34675721/repository/archive.tar.gz?sha=$source_sha"
+          curl --fail --silent --show-error --location --retry 2 \
+            --connect-timeout 15 --max-time 90 "$url" \
+            --output "$RUNNER_TEMP/gitlab-official.tar.gz"
+          tar -tzf "$RUNNER_TEMP/gitlab-official.tar.gz" \
+            > "$RUNNER_TEMP/gitlab-official-tree.txt"
+          printf 'Pinned official GitLab archive fetched. SHA reference: %s\n' "$source_sha"
+          printf 'Files in archive: '
+          wc -l < "$RUNNER_TEMP/gitlab-official-tree.txt"
+          if ! grep -q '/python/eval/rule-eval.yml        run: python3 scripts/experiments/evaluate_rule_catalogs.py
+
+      - name: Upload metadata only, never third-party rule source
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: semgrep-catalogue-qualification-${{ github.run_id }}
+          path: ${{ runner.temp }}/catalog-qualification.json
+          retention-days: 7
+          if-no-files-found: warn
+ "$RUNNER_TEMP/gitlab-official-tree.txt"; then
+            echo "::error::Official GitLab archive did not contain expected Python rule"
+            exit 1
+          fi
+
       - name: Audit rule file licenses and test vulnerability/benign pairs
         run: python3 scripts/experiments/evaluate_rule_catalogs.py
 
