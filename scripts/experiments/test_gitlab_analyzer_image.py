@@ -27,6 +27,7 @@ def run(cmd, timeout=300):
 
 def container(ref, entry, args, mounts=(), timeout=300):
     cmd = ["docker", "run", "--rm", "--pull", "never",
+           "--user", str(os.getuid()) + ":" + str(os.getgid()),
            "--network", "none", "--cap-drop", "ALL",
            "--security-opt", "no-new-privileges",
            "--pids-limit", "256", "--memory", "4g", "--cpus", "2",
