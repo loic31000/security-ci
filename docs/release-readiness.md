@@ -30,17 +30,34 @@ de tag, de release GitHub ou de déploiement.
 7. Les instructions d'intégration, les versions et les verrous de
    dépendances sont explicites. Aucune règle de protection de branche ne
    change sans une demande séparée du propriétaire.
+8. **Fiabilité répétable de Semgrep :** au moins trois exécutions **distinctes**
+   de `Security Audit` sur le **même commit candidat**, toutes réussies
+   **à la première tentative**, avec le job Semgrep réussi et les règles
+   approuvées vérifiées. Aucune relance d'un job échoué ne compte.
+   Les résultats doivent être vérifiés sur GitHub ; observer également le
+   comportement sur plusieurs jours avant de qualifier le fournisseur de stable.
+   **L'incident #29 doit être résolu** avant toute v1.0.0.
 
 ## Vérificateur de complétude
 
 Le script `scripts/release_readiness.py` accepte un JSON de preuves contenant
 les dix statuts GitHub, les nombres de tests et cibles, les cinq contrôles
-positifs, les quatre négatifs, les URL exactes des exécutions et l'essai
-externe non fusionné :
+positifs, les quatre négatifs, **trois preuves `stability_runs`**, les URL
+exactes des exécutions et l'essai externe non fusionné :
 
 ```bash
 python3 scripts/release_readiness.py --evidence chemin/vers/preuves-verifiees.json
 ```
+
+Le tableau `stability_runs` comprend au moins trois objets avec `url`
+(`https://github.com/loic31000/security-ci/actions/runs/...`),
+`commit` (identique à `security_ci_commit`),
+`attempt: 1`, `conclusion: "success"` et `semgrep: "success"`.
+Les identifiants des runs doivent être différents. Le vérificateur
+contrôle la **cohérence déclarative** ; un humain doit vérifier que les
+jobs ont réellement été exécutés, sans relance, et que le journal Semgrep
+confirme les **225 règles approuvées**. La consultation de la seule
+dernière exécution verte ne suffit plus.
 
 L'objet `external_trial` doit aussi fournir des **preuves d'exécution sur
 runner**, pas seulement un statut textuel `success` :

@@ -21,6 +21,35 @@ BENIGN = frozenset(("semgrep", "gitleaks", "zizmor", "jscpd"))
 EXTERNAL_JOBS = frozenset(("semgrep", "trivy", "gitleaks", "zizmor", "go_tests"))
 EXTERNAL_REPORTS = frozenset(("semgrep", "trivy", "gitleaks", "zizmor"))
 SHA_RE = re.compile(r"^[a-f0-9]{40}$")
+STABILITY_RUN_PREFIX = "https://github.com/loic31000/security-ci/actions/runs/"
+
+
+def stability_issues(runs, commit):
+    """Require independently executed, first-attempt audit runs on this commit."""
+    if not isinstance(runs, list) or len(runs) < 3:
+        return ["at least three independent first-attempt Security Audit runs are required"]
+    issues = []
+    urls = set()
+    for run in runs:
+        if not isinstance(run, dict):
+            issues.append("malformed Security Audit stability evidence")
+            continue
+        url = run.get("url")
+        if (not isinstance(url, str)
+                or not url.startswith(STABILITY_RUN_PREFIX)
+                or not url[len(STABILITY_RUN_PREFIX):].isdigit()):
+            issues.append("invalid Security Audit stability run URL")
+        elif url in urls:
+            issues.append("duplicate Security Audit stability run")
+        else:
+            urls.add(url)
+        if run.get("commit") != commit:
+            issues.append("stability run does not match release candidate commit")
+        if type(run.get("attempt")) is not int or run["attempt"] != 1:
+            issues.append("stability run required a retry")
+        if run.get("conclusion") != "success" or run.get("semgrep") != "success":
+            issues.append("Security Audit or Semgrep was not successful")
+    return issues
 
 
 def validate(evidence):
@@ -28,6 +57,7 @@ def validate(evidence):
         raise ValueError("release evidence must be an object")
     issues = []
     ref = evidence.get("security_ci_commit")
+    issues.extend(stability_issues(evidence.get("stability_runs"), ref))
     if not isinstance(ref, str) or not SHA_RE.fullmatch(ref):
         issues.append("missing reviewed 40-character security-ci commit SHA")
     checks = evidence.get("checks")
