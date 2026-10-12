@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 
 from ruamel.yaml import YAML
 
@@ -124,10 +125,34 @@ def run_fixture(name, rule_file, expected_id, ext, positive, negative, tmp):
                           "valid": bool(matches) if kind == "positive" else len(results) == 0}
     return outcomes
 
-def full_profile_compatibility(tmp):
+def official_archive_rules():
+    archive = Path(os.environ["RUNNER_TEMP"]) / "gitlab-official.tar.gz"
+    out = {}
+    with tarfile.open(archive, "r:gz") as bundle:
+        for member in bundle:
+            if not member.isfile() or member.size > 1024 * 1024:
+                continue
+            parts = member.name.split("/", 1)
+            if len(parts) != 2 or ".." in Path(parts[1]).parts:
+                continue
+            if not parts[1].endswith((".yml", ".yaml")):
+                continue
+            stream = bundle.extractfile(member)
+            if stream is not None:
+                out[parts[1]] = stream.read()
+    return out
+
+
+def header_license(data):
+    head = "\n".join(data.decode("utf-8").splitlines()[:12])
+    return re.search(r"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b", head)
+
+
+def full_profile_compatibility(tmp, use_official=False):
     """Test Qodana MIT/Apache and 0xdea C vulnerability rules on an ephemeral runner."""
     selected = tmp / "selected_rules"
     selected.mkdir()
+    upstream = official_archive_rules() if use_official else None
     stats = {"selected": 0, "languages": {}, "rule_ids": 0}
     languages = collections.Counter()
     rule_ids = collections.Counter()
@@ -156,7 +181,13 @@ def full_profile_compatibility(tmp):
                 rule_ids[rule["id"]] += 1
             output = selected / source / rel
             output.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(file, output)
+            if use_official and source == "qodana":
+                original = upstream.get(rel)
+                if original is None or not header_license(original):
+                    raise ValueError("official file missing or has an unapproved header: " + rel)
+                output.write_bytes(original)
+            else:
+                shutil.copy2(file, output)
             stats["selected"] += 1
     stats["languages"] = dict(languages)
     stats["rule_ids"] = len(rule_ids)
@@ -283,6 +314,19 @@ def main():
                 problems.append("full selected-rule profile failed compatibility or fixture checks")
     except Exception as exc:
         problems.append("full profile test exception: " + type(exc).__name__ + ": " + str(exc))
+    try:
+        with tempfile.TemporaryDirectory() as official_temp:
+            official = full_profile_compatibility(Path(official_temp), use_official=True)
+            report["official_full_profile"] = official
+            if (not official.get("semgrep_validate_ok") or not official.get("semgrep_scan_ok")
+                    or official.get("positive_detected") != len(FIXTURES)
+                    or official.get("benign_false_positives") != 0
+                    or official.get("engine_report_errors") != 0
+                    or not official.get("sarif_valid")
+                    or not official.get("sarif_json_count_parity")):
+                problems.append("original GitLab rules plus 0xdea C failed the full-profile controls")
+    except Exception as exc:
+        problems.append("official original rules profile error: " + type(exc).__name__ + ": " + str(exc))
     report["status"] = "SMOKE_PASS" if not problems else "QUALIFICATION_FAILED"
     report["problems"] = problems
     print(json.dumps(report, indent=2))
@@ -309,6 +353,14 @@ def main():
                        str(data.get("positive_detected", "?")) + "/" + str(len(FIXTURES)) +
                        ", faux signalements bénins " + str(data.get("benign_false_positives", "?")))
         summary.append("- Langages déclarés par les règles retenues : " + str(data["languages"]))
+    if "official_full_profile" in report:
+        official = report["official_full_profile"]
+        summary.append("- **Original officiel GitLab** : " +
+                       str(official.get("selected")) + " fichiers, Semgrep valide " +
+                       str(official.get("semgrep_validate_ok")) +
+                       ", détections " + str(official.get("positive_detected")) +
+                       "/5, alertes bénignes " + str(official.get("benign_false_positives")) +
+                       ", SARIF valide " + str(official.get("sarif_valid")))
     summary.extend(["", "**État : " + report["status"] + "**",
                     "Ces tests limités ne prouvent pas l'équivalence aux 225 règles Semgrep officielles.",
                     "Aucun catalogue de règles n'est archivé ni publié."])
