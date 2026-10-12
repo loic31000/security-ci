@@ -218,6 +218,26 @@ def full_profile_compatibility(tmp):
     stats["expected_positive"] = len(FIXTURES)
     stats["benign_false_positives"] = benign_false_positives
     stats["missing_positives"] = missing_positive
+    sarif_file = tmp / "profile.sarif"
+    cmd = ["semgrep", "scan", "--disable-version-check", "--metrics", "off",
+           "--config", str(selected), "--sarif", "--output", str(sarif_file),
+           str(fixture_root)]
+    done = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    stats["sarif_valid"] = False
+    if done.returncode == 0 and sarif_file.is_file():
+        doc = json.loads(sarif_file.read_text(encoding="utf-8"))
+        runs = doc.get("runs")
+        stats["sarif_valid"] = (
+            doc.get("version") == "2.1.0"
+            and isinstance(runs, list) and bool(runs)
+            and all(isinstance(r.get("tool", {}).get("driver", {}).get("name"), str)
+                    and isinstance(r.get("results"), list) for r in runs)
+        )
+        if stats["sarif_valid"]:
+            stats["sarif_findings"] = sum(len(r["results"]) for r in runs)
+            stats["sarif_json_count_parity"] = stats["sarif_findings"] == len(results)
+    else:
+        stats["sarif_error_excerpt"] = done.stderr[-500:]
     return stats
 
 
@@ -257,7 +277,9 @@ def main():
             if (not stats.get("semgrep_validate_ok") or not stats.get("semgrep_scan_ok")
                     or stats.get("positive_detected") != len(FIXTURES)
                     or stats.get("benign_false_positives") != 0
-                    or stats.get("engine_report_errors") != 0):
+                    or stats.get("engine_report_errors") != 0
+                    or not stats.get("sarif_valid")
+                    or not stats.get("sarif_json_count_parity")):
                 problems.append("full selected-rule profile failed compatibility or fixture checks")
     except Exception as exc:
         problems.append("full profile test exception: " + type(exc).__name__ + ": " + str(exc))
