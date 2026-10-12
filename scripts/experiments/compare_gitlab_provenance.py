@@ -11,6 +11,10 @@ import re
 import sys
 import tarfile
 
+from ruamel.yaml import YAML
+
+PARSER = YAML(typ="safe")
+
 GITLAB_SHA = "39fc7de205d447c70e75a1fdabdcf4588733adc8"
 MIRROR_SHA = "19af7ed20926ed0b1666e5f78722d4c0824ba99a"
 ROOT = Path(os.environ["RUNNER_TEMP"])
@@ -24,6 +28,32 @@ def declared_license(data):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+def changed_fields(left, right, prefix="root", limit=20):
+    """Only structural key paths, never rule text or IDs."""
+    if type(left) is not type(right):
+        return [prefix + ":type"]
+    if isinstance(left, dict):
+        changes = []
+        for key in set(left) | set(right):
+            if key not in left or key not in right:
+                changes.append(prefix + "." + str(key) + ":presence")
+            else:
+                changes.extend(changed_fields(left[key], right[key], prefix + "." + str(key)))
+            if len(changes) >= limit:
+                break
+        return changes[:limit]
+    if isinstance(left, list):
+        if len(left) != len(right):
+            return [prefix + ":length"]
+        changes = []
+        for i, (a, b) in enumerate(zip(left, right)):
+            changes.extend(changed_fields(a, b, prefix + "[" + str(i) + "]"))
+            if len(changes) >= limit:
+                break
+        return changes[:limit]
+    return [prefix] if left != right else []
+
 
 def compare():
     index = {}
@@ -44,6 +74,8 @@ def compare():
     statuses = {"exact": 0, "modified": 0, "missing": 0}
     examples = {"modified": [], "missing": []}
     by_license = {}
+    mismatches = []
+    upstream_license_mismatches = 0
     for file in sorted(MIRROR.rglob("*.yml")) + sorted(MIRROR.rglob("*.yaml")):
         rel = file.relative_to(MIRROR).as_posix()
         if rel.startswith(("rules/", "jetbrains/", ".github/")):
@@ -59,6 +91,18 @@ def compare():
             status = "exact"
         else:
             status = "modified"
+        if rel in index and declared_license(index[rel]) != licence:
+            upstream_license_mismatches += 1
+        if status == "modified":
+            try:
+                left_doc = PARSER.load(local.decode("utf-8"))
+                right_doc = PARSER.load(index[rel].decode("utf-8"))
+                mismatches.append({
+                    "path": rel, "semantically_identical": left_doc == right_doc,
+                    "changed_field_paths": changed_fields(left_doc, right_doc),
+                })
+            except Exception as e:
+                mismatches.append({"path": rel, "cannot_parse": type(e).__name__})
         statuses[status] += 1
         by_license.setdefault(category, {"exact": 0, "modified": 0, "missing": 0})[status] += 1
         if status in examples and len(examples[status]) < 8:
@@ -72,6 +116,8 @@ def compare():
         "byte_comparison": statuses,
         "by_declared_license": by_license,
         "sample_paths": examples,
+        "mismatch_diagnostics": mismatches,
+        "upstream_license_header_mismatches": upstream_license_mismatches,
         "all_bytes_equal_to_upstream": total > 0 and statuses["exact"] == total,
         "limits": "Exact paths and byte hashes only; no legal determination or equality to Semgrep Registry's 225-rule bundle.",
     }
