@@ -132,14 +132,34 @@ def test():
             rule_target.write_bytes(files[name])
             # Semgrep test runner pairs files sharing the rule basename.
             (rule_target.parent / (basename + suffix)).write_bytes(files[sibling])
-        command = ["semgrep", "--metrics=off", "--test", str(target)]
+        command = ["semgrep", "--metrics=off", "--json", "--test", "--config", str(target), str(target)]
         try:
             done = subprocess.run(command, capture_output=True, text=True, timeout=240)
             result["exit_code"] = done.returncode
             result["stdout_sha256"] = hashlib.sha256(done.stdout.encode()).hexdigest()
             result["stderr_sha256"] = hashlib.sha256(done.stderr.encode()).hexdigest()
-            result["status"] = "PASS" if done.returncode == 0 else "UPSTREAM_FIXTURE_FAILURE"
-            # No code, rule text, or third-party findings in logs/artifacts.
+            try:
+                data = json.loads(done.stdout)
+                sections = data.get("results", {})
+                checks = [
+                    check
+                    for section in sections.values()
+                    if isinstance(section, dict)
+                    for check in section.get("checks", {}).values()
+                    if isinstance(check, dict) and type(check.get("passed")) is bool
+                ] if isinstance(sections, dict) else []
+                result["rules_with_executed_assertions"] = len(checks)
+                result["rules_with_passing_assertions"] = sum(x["passed"] for x in checks)
+                result["individual_rules_tested"] = len(checks) >= len(picked)
+                if len(checks) < len(picked):
+                    result["status"] = "NO_PROOF_TESTS_EXECUTED"
+                elif done.returncode != 0 or not all(x["passed"] for x in checks):
+                    result["status"] = "UPSTREAM_FIXTURE_FAILURE"
+                else:
+                    result["status"] = "PASS"
+            except (ValueError, TypeError, AttributeError):
+                result["status"] = "INVALID_TEST_REPORT"
+            # Do not store or print third-party rule text, code, or findings.
         except subprocess.TimeoutExpired:
             result["status"] = "TIMEOUT"
     return result
