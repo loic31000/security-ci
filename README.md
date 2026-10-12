@@ -4,6 +4,11 @@
 
 Security CI est un workflow GitHub Actions **réutilisable** : on ajoute un fichier YAML dans son propre dépôt et on obtient des rapports sur son code. Le projet est en préparation de sa première version stable ; **`v1.0.0` n'est pas publiée**.
 
+> **Essai uniquement :** le registre externe Semgrep peut encore empêcher
+> l'audit de démarrer (voir [incident #29](https://github.com/loic31000/security-ci/issues/29)).
+> Le workflow présenté ici n'est pas encore qualifié pour un contrôle
+> obligatoire de production ; aucun résultat vert isolé ne prouve sa stabilité.
+
 Il lance les contrôles suivants :
 
 | Contrôle | Ce qu'il cherche |
