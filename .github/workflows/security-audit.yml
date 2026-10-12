@@ -108,7 +108,7 @@ jobs:
           verified=false
           for attempt in 1 2 3; do
             if curl --fail --silent --show-error --location --retry 2 \
-                --connect-timeout 20 --max-time 90 -H 'Accept: application/json' \
+                --connect-timeout 20 --max-time 90 -H 'Accept: text/yaml' \
                 https://semgrep.dev/c/p/security-audit \
                 --output "$bundle" &&
                 python3 .audit-python-lock/scripts/verify_semgrep_bundle.py \
