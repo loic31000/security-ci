@@ -99,6 +99,7 @@ def rules_inventory(rules):
         "rules_without_language": total_no_language,
         "rules_by_language": dict(sorted(languages.items())),
         "distinct_cwe_per_language": {k: len(v) for k, v in sorted(per_language_cwe.items())},
+        "cwe_ids_by_language": {k: sorted(v, key=int) for k, v in sorted(per_language_cwe.items())},
         "total_distinct_cwe": len(weak_count),
         "top_cwe_by_rule_count": dict(weak_count.most_common(12)),
         "metadata_severity": dict(annotated),
@@ -144,15 +145,23 @@ def main():
     profile = rules_inventory(gitlab_rules + external_rules)
     gitlab = rules_inventory(gitlab_rules)
     independent = rules_inventory(external_rules)
+    extra_gitlab_rules = [
+        rule for path, source in sorted(upstream_permissive.items())
+        if path not in selected_paths
+        for rule in parse_rules(source)
+    ]
+    expanded = rules_inventory(gitlab_rules + extra_gitlab_rules + external_rules)
 
     assert profile["rules"] == 238 and profile["duplicate_ids"] == 0, "profile drift"
     assert gitlab["rules"] == 210 and independent["rules"] == 28, "unexpected source split"
+    assert expanded["rules"] == 297 and expanded["duplicate_ids"] == 0, "expanded rules drift"
 
     output = {
         "upstream_commit": OFFICIAL_SHA,
         "mirror_commit": MIRROR_SHA,
         "external_commit": EXTERNAL_SHA,
         "candidate": profile,
+        "expanded_candidate": expanded,
         "gitlab": gitlab,
         "0xdea": independent,
         "potentially_permissive_official_rules_not_in_candidate": {
@@ -170,6 +179,7 @@ def main():
         f.write(f"- Selected 0xdea C/C++ rules: {independent['rules']}\n")
         f.write(f"- Rule records without CWE metadata: {profile['rules_without_cwe_metadata']}\n")
         f.write(f"- Distinct claimed CWEs: {profile['total_distinct_cwe']}\n")
+        f.write(f"- Expanded official candidate: {expanded['rules']} rules, {expanded['total_distinct_cwe']} CWEs mentioned\\n")
         for lang, count in profile["rules_by_language"].items():
             f.write(f"- {lang}: {count} rules, {profile['distinct_cwe_per_language'].get(lang, 0)} CWEs mentioned\n")
         f.write("The source Semgrep Registry 225-rule inventory is not available for a defensible parity claim.\n")
