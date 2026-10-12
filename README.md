@@ -46,7 +46,7 @@ permissions:
 
 jobs:
   security:
-    uses: loic31000/security-ci/.github/workflows/security-audit.yml@a5500d705a59c7e34dfdfdb1f12db600ea10ad82
+    uses: loic31000/security-ci/.github/workflows/security-audit.yml@a7049d644bf7e63006687f53f10dbf4d27910516
     with:
       enforce: false
       test_command: 'go test ./...'
