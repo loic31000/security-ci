@@ -1,0 +1,79 @@
+name: Experimental GitLab Semgrep OCI image qualification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-oci-experiment:
+    name: Anonymous GitLab image + offline Semgrep + SARIF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - name: Checkout test harness only
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Confirm Docker is available
+        run: |
+          docker info --format 'Docker daemon OS: {{.OperatingSystem}}'
+
+      - name: Run OCI digest and offline detection qualification
+        run: python3 scripts/experiments/test_gitlab_analyzer_image.py
+
+      - name: Probe approved 225-rule source for metadata comparison
+        run: |
+          set -euo pipefail
+          approved="$RUNNER_TEMP/gitlab-oci-test/approved.yaml"
+          expected="b109a039df712f30c6d3e25e1e8358053fd0f1c91b92d0e8d2871cd141fe602f"
+          if curl --fail --silent --show-error --location --retry 2 \
+              --connect-timeout 15 --max-time 60 -H 'Accept: text/yaml' \
+              https://semgrep.dev/c/p/security-audit --output "$approved"; then
+            observed="$(sha256sum "$approved" | awk '{print $1}')"
+            if [[ "$observed" == "$expected" ]]; then
+              echo 'Approved bundle present for read-only metadata comparison'
+            else
+              rm -f "$approved"
+              echo '::warning::Registry drift; unapproved rules are never parsed or run'
+            fi
+          else
+            rm -f "$approved"
+            echo '::warning::Approved rules unavailable; baseline comparison skipped'
+          fi
+
+      - name: Compare pinned OCI rules to verified baseline without network
+        run: |
+          set -euo pipefail
+          oci="registry.gitlab.com/security-products/semgrep@sha256:fd543fe610bf619f9370397663289ddb4a394d50fec81f7525de7700ea8ce642"
+          output="$RUNNER_TEMP/gitlab-oci-test"
+          mounts=(
+            --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/experiments/inspect_gitlab_pinned_rules.py,dst=/harness/inspect.py,readonly"
+            --mount "type=bind,src=$output,dst=/reports"
+          )
+          if [[ -s "$output/approved.yaml" ]]; then
+            mounts+=(--mount "type=bind,src=$output/approved.yaml,dst=/approved/rules.yaml,readonly")
+          fi
+          docker run --rm --pull never --network none \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 256 --memory 4g --cpus 2 \
+            --tmpfs /tmp:rw,nosuid,size=1g \
+            --tmpfs /root/.cache:rw,nosuid,size=256m \
+            -e HOME=/tmp "${mounts[@]}" \
+            --entrypoint python3 "$oci" /harness/inspect.py
+          rm -f "$output/approved.yaml"
+
+      - name: Upload metadata only (no image, rules or third-party code)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gitlab-analyzer-oci-evidence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gitlab-oci-test/evidence.json
+            ${{ runner.temp }}/gitlab-oci-test/image-coverage-metadata.json
+          if-no-files-found: warn
+          retention-days: 7
