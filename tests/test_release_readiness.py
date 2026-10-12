@@ -16,6 +16,16 @@ LOCAL_RUN = "https://github.com/loic31000/local-agents/actions/runs/12345"
 def evidence():
     return {
         "security_ci_commit": SHA,
+        "stability_runs": [
+            {
+                "url": f"https://github.com/loic31000/security-ci/actions/runs/{1000 + index}",
+                "commit": SHA,
+                "attempt": 1,
+                "conclusion": "success",
+                "semgrep": "success",
+            }
+            for index in range(3)
+        ],
         "checks": {name: "success" for name in module.EXPECTED_CHECKS},
         "junit_cases": 58,
         "engine_coverage": {"state": "SCANNED", "targets": ["python", "node", "go"]},
@@ -47,6 +57,33 @@ def evidence():
 class ReleaseReadinessTest(unittest.TestCase):
     def test_complete_consistent_evidence_can_qualify(self):
         self.assertEqual(module.validate(evidence()), [])
+
+    def test_stability_requires_three_distinct_successes_on_first_attempt(self):
+        for mutation in ("missing", "two", "duplicate", "retried", "wrong_commit",
+                         "semgrep_failed", "bad_url"):
+            record = evidence()
+            runs = record["stability_runs"]
+            if mutation == "missing":
+                del record["stability_runs"]
+            elif mutation == "two":
+                runs.pop()
+            elif mutation == "duplicate":
+                runs[2]["url"] = runs[0]["url"]
+            elif mutation == "retried":
+                runs[1]["attempt"] = 2
+            elif mutation == "wrong_commit":
+                runs[1]["commit"] = "b" * 40
+            elif mutation == "semgrep_failed":
+                runs[1]["semgrep"] = "failure"
+            else:
+                runs[1]["url"] = "https://example.org/actions/runs/123"
+            with self.subTest(mutation=mutation):
+                self.assertTrue(module.validate(record))
+
+    def test_bool_attempt_cannot_masquer_retry(self):
+        record = evidence()
+        record["stability_runs"][0]["attempt"] = True
+        self.assertTrue(module.validate(record))
 
     def test_missing_external_trial_cannot_be_overridden_by_ci(self):
         record = evidence()
