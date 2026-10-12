@@ -209,6 +209,7 @@ def full_profile_compatibility(tmp):
                 missing_positive.append(rule_id)
         else:
             benign_false_positives += len(findings)
+    stats["detections_by_fixture"] = {name: sorted(ids) for name, ids in by_file.items()}
     stats["positive_detected"] = positive
     stats["expected_positive"] = len(FIXTURES)
     stats["benign_false_positives"] = benign_false_positives
