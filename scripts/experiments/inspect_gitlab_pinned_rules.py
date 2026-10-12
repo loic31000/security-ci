@@ -71,7 +71,7 @@ def bucket_file_license(header):
         return "RESTRICTED_COMMONS_CLAUSE"
     if "GNU Lesser General Public License v3.0" in header:
         return "LGPL_V3_CLAIMED"
-    if re.search(r"(?im)^#\\s*License:\\s*(MIT|Apache 2\\.0)\\b", header):
+    if re.search(r"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b", header):
         return "MIT_OR_APACHE_CLAIMED"
     return "UNDECLARED"
 
