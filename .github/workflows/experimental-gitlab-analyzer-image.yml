@@ -19,7 +19,8 @@ jobs:
           persist-credentials: false
 
       - name: Confirm Docker is available
-        run: docker info --format 'Docker daemon OS: {{.OperatingSystem}}'
+        run: |
+          docker info --format 'Docker daemon OS: {{.OperatingSystem}}'
 
       - name: Run OCI digest and offline detection qualification
         run: python3 scripts/experiments/test_gitlab_analyzer_image.py
