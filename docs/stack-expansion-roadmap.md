@@ -77,6 +77,16 @@ Si le fournisseur ne le fournit pas, le job reste en échec explicite
 L'incident de disponibilité #29 reste ouvert ; aucune approbation
 automatique du JSON, aucune redistribution des règles.
 
+**Constat du 12 octobre 2026 :** la PR #47 a demandé explicitement le format
+YAML et a réussi plusieurs fois, mais le registre a de nouveau fourni
+la réponse à empreinte non approuvée pendant la PR #48, même avec
+`Accept: text/yaml`. La PR #48 a été fermée sans fusion. Une seule
+exécution verte ne suffit donc pas à qualifier la disponibilité.
+Avant toute release, il faut **identifier une source immuable vérifiable**,
+vérifier son droit d'usage et établir la parité de couverture ; à défaut,
+le fournisseur reste un blocage P0. La licence des règles ne permet pas
+de les republier dans ce dépôt ni de les offrir comme service.
+
 ## Étape suivante - étendre les stacks sans créer de faux « zéro alerte » (P1)
 
 Ordre proposé, **à réévaluer avec les usages réels** :
