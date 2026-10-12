@@ -35,7 +35,10 @@ def container(ref, entry, args, mounts=(), timeout=300):
            "--tmpfs", "/.cache:rw,nosuid,size=256m",
            "-e", "SEMGREP_SEND_METRICS=off", "-e", "HOME=/tmp"]
     for src, dst, mode in mounts:
-        cmd += ["--mount", "type=bind,src=" + str(src) + ",dst=" + dst + "," + mode]
+        mount = "type=bind,src=" + str(src) + ",dst=" + dst
+        if mode == "readonly":
+            mount += ",readonly"
+        cmd += ["--mount", mount]
     return run(cmd + ["--entrypoint", entry, ref] + args, timeout)
 
 
