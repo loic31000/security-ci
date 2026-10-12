@@ -125,6 +125,13 @@ jobs:
             python3 .audit-drift-tools/scripts/semgrep_drift_metadata.py \
               "$bundle" .audit-python-lock/locks/semgrep-security-audit.json \
               "$REPORT_DIR/semgrep-registry-drift.json"
+            {
+              echo "### Semgrep : analyse non exécutée"
+              echo ""
+              echo "**Erreur technique :** le registre externe n'a pas fourni les 225 règles dans leur version approuvée."
+              echo "Security CI a refusé de les exécuter. Aucune conclusion ne peut être tirée sur la sécurité du code."
+              echo "Consulter le diagnostic semgrep-registry-drift.json dans l'artifact Semgrep et l'incident https://github.com/loic31000/security-ci/issues/29."
+            } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::The reviewed Semgrep ruleset is unavailable. Fail closed; review the registry drift separately."
             exit 1
           fi
