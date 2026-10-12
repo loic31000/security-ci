@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           # The official GitLab 2025 revision is checked separately from the GitHub fork.
-          source_sha="0e4c0f45df16bfb1fa537d53cd31fdfa803a084d"
+          source_sha="39fc7de205d447c70e75a1fdabdcf4588733adc8"
           url="https://gitlab.com/gitlab-org/security-products/sast-rules/-/archive/$source_sha/sast-rules-$source_sha.tar.gz"
           curl --fail --silent --show-error --location --retry 2 \
             --connect-timeout 15 --max-time 90 "$url" \
@@ -73,6 +73,9 @@ jobs:
           wc -l < "$RUNNER_TEMP/gitlab-official-tree.txt"
           grep -q 'python/eval/rule-eval.yml$' "$RUNNER_TEMP/gitlab-official-tree.txt"
 
+      - name: Compare pinned GitLab source to mirror by exact file hash
+        run: python3 scripts/experiments/compare_gitlab_provenance.py
+
       - name: Audit rule file licenses and test vulnerability/benign pairs
         run: python3 scripts/experiments/evaluate_rule_catalogs.py
 
@@ -81,6 +84,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: semgrep-catalogue-qualification-${{ github.run_id }}
-          path: ${{ runner.temp }}/catalog-qualification.json
+          path: |
+            ${{ runner.temp }}/catalog-qualification.json
+            ${{ runner.temp }}/catalog-provenance.json
           retention-days: 7
           if-no-files-found: warn
