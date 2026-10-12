@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -123,6 +124,98 @@ def run_fixture(name, rule_file, expected_id, ext, positive, negative, tmp):
                           "valid": bool(matches) if kind == "positive" else len(results) == 0}
     return outcomes
 
+def full_profile_compatibility(tmp):
+    """Inspect only MIT-declared Qodana and MIT-root 0xdea C rules, in ephemeral runner."""
+    selected = tmp / "selected_rules"
+    selected.mkdir()
+    stats = {"selected": 0, "languages": {}, "rule_ids": 0}
+    languages = collections.Counter()
+    rule_ids = collections.Counter()
+    for source, root in SOURCES:
+        for file in sorted(root.rglob("*.yml")) + sorted(root.rglob("*.yaml")):
+            rel = file.relative_to(root).as_posix()
+            if source == "qodana":
+                if rel.startswith(("rules/", "jetbrains/")):
+                    continue
+                header = "\n".join(file.read_text().splitlines()[:12])
+                if not re.search(r"(?im)^#\s*License:\s*MIT\b", header):
+                    continue
+            else:
+                if not rel.startswith("rules/c/"):
+                    continue
+            obj = YAML_PARSER.load(file.read_text())
+            if not isinstance(obj, dict) or not isinstance(obj.get("rules"), list):
+                raise ValueError("invalid selected config: " + source + "/" + rel)
+            for rule in obj["rules"]:
+                for lang in rule.get("languages", []):
+                    languages[str(lang)] += 1
+                rule_ids[rule["id"]] += 1
+            output = selected / source / rel
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(file, output)
+            stats["selected"] += 1
+    stats["languages"] = dict(languages)
+    stats["rule_ids"] = len(rule_ids)
+    stats["duplicate_ids"] = sum(n > 1 for n in rule_ids.values())
+    if stats["duplicate_ids"]:
+        raise ValueError("duplicate rule IDs in candidate profile")
+
+    command = ["semgrep", "scan", "--validate", "--disable-version-check",
+               "--metrics", "off", "--config", str(selected)]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=150)
+    stats["semgrep_validate_ok"] = result.returncode == 0
+    stats["semgrep_validate_error_excerpt"] = (
+        result.stderr[-700:] if result.returncode else ""
+    )
+    if result.returncode:
+        return stats
+
+    fixture_root = tmp / "full_profile_fixtures"
+    fixture_root.mkdir()
+    expected = {}
+    for i, (_, _, rid, ext, positive, negative) in enumerate(FIXTURES):
+        for kind, content in (("positive", positive), ("negative", negative)):
+            path = fixture_root / ("profile" + str(i) + "-" + kind + "." + ext)
+            path.write_text(content, encoding="utf-8")
+            expected[path.name] = (rid, kind)
+    out = tmp / "full_profile.json"
+    command = ["semgrep", "scan", "--disable-version-check", "--metrics", "off",
+               "--config", str(selected), "--json", "--output", str(out),
+               str(fixture_root)]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+    stats["semgrep_scan_ok"] = result.returncode == 0 and out.is_file()
+    if not stats["semgrep_scan_ok"]:
+        stats["semgrep_scan_error_excerpt"] = result.stderr[-700:]
+        return stats
+    result_doc = json.loads(out.read_text(encoding="utf-8"))
+    results = result_doc.get("results")
+    errors = result_doc.get("errors")
+    stats["engine_report_errors"] = len(errors) if isinstance(errors, list) else -1
+    stats["findings"] = len(results) if isinstance(results, list) else -1
+    if not isinstance(results, list) or stats["engine_report_errors"]:
+        return stats
+    by_file = collections.defaultdict(list)
+    for finding in results:
+        by_file[Path(finding.get("path", "")).name].append(finding.get("check_id", ""))
+    positive = 0
+    benign_false_positives = 0
+    missing_positive = []
+    for filename, (rule_id, kind) in expected.items():
+        findings = by_file.get(filename, [])
+        if kind == "positive":
+            if any(f.endswith(rule_id) for f in findings):
+                positive += 1
+            else:
+                missing_positive.append(rule_id)
+        else:
+            benign_false_positives += len(findings)
+    stats["positive_detected"] = positive
+    stats["expected_positive"] = len(FIXTURES)
+    stats["benign_false_positives"] = benign_false_positives
+    stats["missing_positives"] = missing_positive
+    return stats
+
+
 def main():
     problems = []
     report = {"engine": "semgrep==1.179.0", "sources": {}, "fixture_results": {}}
@@ -152,6 +245,17 @@ def main():
     for name, source in report["sources"].items():
         if source["duplicate_ids"] or source["malformed_rule_files"]:
             problems.append(name + " has duplicate IDs or malformed YAML")
+    try:
+        with tempfile.TemporaryDirectory() as full_tmp:
+            stats = full_profile_compatibility(Path(full_tmp))
+            report["full_profile"] = stats
+            if (not stats.get("semgrep_validate_ok") or not stats.get("semgrep_scan_ok")
+                    or stats.get("positive_detected") != len(FIXTURES)
+                    or stats.get("benign_false_positives") != 0
+                    or stats.get("engine_report_errors") != 0):
+                problems.append("full selected-rule profile failed compatibility or fixture checks")
+    except Exception as exc:
+        problems.append("full profile test exception: " + type(exc).__name__ + ": " + str(exc))
     report["status"] = "SMOKE_PASS" if not problems else "QUALIFICATION_FAILED"
     report["problems"] = problems
     print(json.dumps(report, indent=2))
@@ -170,6 +274,14 @@ def main():
                        ("PASS" if all(item.get("valid") for item in outcomes.values()) else "FAIL") +
                        " (positif " + str(outcomes.get("positive", {}).get("findings", "ERREUR")) +
                        ", bénin " + str(outcomes.get("negative", {}).get("findings", "ERREUR")) + ")")
+    if "full_profile" in report:
+        data = report["full_profile"]
+        summary.append("- Profil complet (règles MIT déclarées + 0xdea C) : " +
+                       str(data["selected"]) + " fichiers, validation Semgrep " +
+                       str(data.get("semgrep_validate_ok")) + ", canaris positifs " +
+                       str(data.get("positive_detected", "?")) + "/" + str(len(FIXTURES)) +
+                       ", faux signalements bénins " + str(data.get("benign_false_positives", "?")))
+        summary.append("- Langages déclarés par les règles retenues : " + str(data["languages"]))
     summary.extend(["", "**État : " + report["status"] + "**",
                     "Ces tests limités ne prouvent pas l'équivalence aux 225 règles Semgrep officielles.",
                     "Aucun catalogue de règles n'est archivé ni publié."])
