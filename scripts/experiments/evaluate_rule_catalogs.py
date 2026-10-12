@@ -148,7 +148,7 @@ def header_license(data):
     return re.search(r"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b", head)
 
 
-def full_profile_compatibility(tmp, use_official=False):
+def full_profile_compatibility(tmp, use_official=False, include_extra_official=False):
     """Test Qodana MIT/Apache and 0xdea C vulnerability rules on an ephemeral runner."""
     selected = tmp / "selected_rules"
     selected.mkdir()
@@ -189,6 +189,34 @@ def full_profile_compatibility(tmp, use_official=False):
             else:
                 shutil.copy2(file, output)
             stats["selected"] += 1
+    if include_extra_official:
+        if not use_official:
+            raise ValueError("extras can only be copied from verified original archive")
+        extra_count = 0
+        for rel, payload in sorted(upstream.items()):
+            if not rel.startswith(("c/", "csharp/", "go/", "java/",
+                                   "javascript/", "python/", "scala/",
+                                   "php/", "ruby/", "rust/", "swift/",
+                                   "kotlin/", "typescript/")):
+                continue
+            if not header_license(payload):
+                continue
+            dest = selected / "qodana" / rel
+            if dest.is_file():
+                continue
+            parsed = YAML_PARSER.load(payload)
+            rule_list = parsed.get("rules") if isinstance(parsed, dict) else None
+            if not isinstance(rule_list, list) or not rule_list:
+                raise ValueError("missing rules in upstream-only candidate")
+            for rule in rule_list:
+                for lang in rule.get("languages", []):
+                    languages[str(lang)] += 1
+                rule_ids[rule["id"]] += 1
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(payload)
+            extra_count += 1
+        stats["additional_official_rule_files"] = extra_count
+        stats["selected"] += extra_count
     stats["languages"] = dict(languages)
     stats["rule_ids"] = len(rule_ids)
     stats["duplicate_ids"] = sum(n > 1 for n in rule_ids.values())
@@ -327,6 +355,22 @@ def main():
                 problems.append("original GitLab rules plus 0xdea C failed the full-profile controls")
     except Exception as exc:
         problems.append("official original rules profile error: " + type(exc).__name__ + ": " + str(exc))
+    try:
+        with tempfile.TemporaryDirectory() as expanded_temp:
+            expanded = full_profile_compatibility(
+                Path(expanded_temp), use_official=True, include_extra_official=True
+            )
+            report["expanded_official_full_profile"] = expanded
+            if (not expanded.get("semgrep_validate_ok") or not expanded.get("semgrep_scan_ok")
+                    or expanded.get("positive_detected") != len(FIXTURES)
+                    or expanded.get("benign_false_positives") != 0
+                    or expanded.get("engine_report_errors") != 0
+                    or not expanded.get("sarif_valid")
+                    or not expanded.get("sarif_json_count_parity")):
+                problems.append("expanded GitLab original profile failed basic or SARIF canaries")
+    except Exception as exc:
+        problems.append("expanded GitLab original profile cannot be approved: " +
+                        type(exc).__name__ + ": " + str(exc))
     report["status"] = "SMOKE_PASS" if not problems else "QUALIFICATION_FAILED"
     report["problems"] = problems
     print(json.dumps(report, indent=2))
@@ -361,6 +405,15 @@ def main():
                        ", détections " + str(official.get("positive_detected")) +
                        "/5, alertes bénignes " + str(official.get("benign_false_positives")) +
                        ", SARIF valide " + str(official.get("sarif_valid")))
+    if "expanded_official_full_profile" in report:
+        expanded = report["expanded_official_full_profile"]
+        summary.append("- Profil officiel élargi : " + str(expanded.get("selected")) +
+                       " règles, dont " + str(expanded.get("additional_official_rule_files")) +
+                       " nouvelles depuis le miroir, validation " +
+                       str(expanded.get("semgrep_validate_ok")) +
+                       ", positifs " + str(expanded.get("positive_detected")) +
+                       "/5, alertes bénignes " + str(expanded.get("benign_false_positives")) +
+                       ", SARIF " + str(expanded.get("sarif_valid")))
     summary.extend(["", "**État : " + report["status"] + "**",
                     "Ces tests limités ne prouvent pas l'équivalence aux 225 règles Semgrep officielles.",
                     "Aucun catalogue de règles n'est archivé ni publié."])
