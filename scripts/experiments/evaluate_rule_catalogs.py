@@ -125,7 +125,7 @@ def run_fixture(name, rule_file, expected_id, ext, positive, negative, tmp):
     return outcomes
 
 def full_profile_compatibility(tmp):
-    """Inspect only MIT-declared Qodana and MIT-root 0xdea C rules, in ephemeral runner."""
+    """Test Qodana MIT/Apache and 0xdea C vulnerability rules on an ephemeral runner."""
     selected = tmp / "selected_rules"
     selected.mkdir()
     stats = {"selected": 0, "languages": {}, "rule_ids": 0}
@@ -138,7 +138,7 @@ def full_profile_compatibility(tmp):
                 if rel.startswith(("rules/", "jetbrains/")):
                     continue
                 header = "\n".join(file.read_text().splitlines()[:12])
-                if not re.search(r"(?im)^#\s*License:\s*MIT\b", header):
+                if not re.search(r"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b", header):
                     continue
             else:
                 if not rel.startswith("rules/c/"):
@@ -146,6 +146,10 @@ def full_profile_compatibility(tmp):
             obj = YAML_PARSER.load(file.read_text())
             if not isinstance(obj, dict) or not isinstance(obj.get("rules"), list):
                 raise ValueError("invalid selected config: " + source + "/" + rel)
+            if source == "0xdea":
+                if not all("vuln" in (r.get("metadata", {}).get("subcategory") or [])
+                           for r in obj["rules"]):
+                    continue
             for rule in obj["rules"]:
                 for lang in rule.get("languages", []):
                     languages[str(lang)] += 1
@@ -277,7 +281,7 @@ def main():
                        ", bénin " + str(outcomes.get("negative", {}).get("findings", "ERREUR")) + ")")
     if "full_profile" in report:
         data = report["full_profile"]
-        summary.append("- Profil complet (règles MIT déclarées + 0xdea C) : " +
+        summary.append("- Profil filtré (règles MIT/Apache déclarées + 0xdea C vulnérabilités) : " +
                        str(data["selected"]) + " fichiers, validation Semgrep " +
                        str(data.get("semgrep_validate_ok")) + ", canaris positifs " +
                        str(data.get("positive_detected", "?")) + "/" + str(len(FIXTURES)) +
