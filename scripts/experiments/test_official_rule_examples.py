@@ -27,7 +27,7 @@ LANGUAGES = {
     "csharp": (".cs",),
     "scala": (".scala",),
 }
-PER_LANGUAGE = 5
+PER_LANGUAGE = 10
 SAFE_LICENSE = re.compile(rb"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b")
 RULE_ANN = re.compile(r"(?m)^\s*(?:#|//)\s*ruleid:\s*([a-zA-Z0-9_.-]+)")
 OK_ANN = re.compile(r"(?m)^\s*(?:#|//)\s*ok:\s*([a-zA-Z0-9_.-]+)")
