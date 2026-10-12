@@ -26,6 +26,7 @@ LANGUAGES = {
     "javascript": (".js", ".ts"),
     "csharp": (".cs",),
     "scala": (".scala",),
+    "java": (".java",),
 }
 PER_LANGUAGE = 10
 SAFE_LICENSE = re.compile(rb"(?im)^#\s*License:\s*(MIT|Apache 2\.0)\b")
