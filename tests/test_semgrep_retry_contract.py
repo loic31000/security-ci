@@ -29,6 +29,8 @@ class SemgrepRegistryRetryTest(unittest.TestCase):
         self.assertIn('echo "::error::The reviewed Semgrep ruleset is unavailable.', reject_branch)
         self.assertIn('exit 1', reject_branch)
         self.assertIn('semgrep_drift_metadata.py', reject_branch)
+        self.assertIn("### Semgrep : analyse non exécutée", reject_branch)
+        self.assertIn('>> "$GITHUB_STEP_SUMMARY"', reject_branch)
 
         self.assertGreater(
             part.index('echo "SEMGREP_CONFIG_PATH='),
