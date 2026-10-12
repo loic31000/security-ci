@@ -30,6 +30,13 @@ de tag, de release GitHub ou de déploiement.
 7. Les instructions d'intégration, les versions et les verrous de
    dépendances sont explicites. Aucune règle de protection de branche ne
    change sans une demande séparée du propriétaire.
+8. **Fiabilité répétable de Semgrep :** au moins trois exécutions **distinctes**
+   de `Security Audit` sur le **même commit candidat**, toutes réussies
+   **à la première tentative**, avec le job Semgrep réussi et les règles
+   approuvées vérifiées. Aucune relance d'un job échoué ne compte.
+   Les résultats doivent être vérifiés sur GitHub ; observer également le
+   comportement sur plusieurs jours avant de qualifier le fournisseur de stable.
+   **L'incident #29 doit être résolu** avant toute v1.0.0.
 
 ## Vérificateur de complétude
 
